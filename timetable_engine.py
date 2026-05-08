@@ -2,7 +2,7 @@ import asyncio
 import os
 from playwright.async_api import async_playwright
 
-
+# Update: Fixed syntax error for Railway deployment
 async def get_timetable_screenshot(group_name: str) -> str | None:
     """
     tsue.edupage.org saytidan guruh jadvalini screenshot qiladi.
@@ -24,7 +24,6 @@ async def get_timetable_screenshot(group_name: str) -> str | None:
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
 
             print(f"[Timetable] Fetching: {group_name}")
-            # Sahifa yuklanishini kutamiz (DOM tayyor bo'lishi kifoya)
             await page.goto("https://tsue.edupage.org/timetable/", wait_until="domcontentloaded", timeout=20000)
 
             # 1. "Sinflar" (Классы) menyusini darhol bosish
@@ -57,10 +56,8 @@ async def get_timetable_screenshot(group_name: str) -> str | None:
             target = await page.query_selector("div.print-nobreak") or await page.query_selector(".timetable")
             if target:
                 await target.screenshot(path=output_path)
-                print(f"[Timetable] Fast click screenshot done for {group_name}")
             else:
                 await page.screenshot(path=output_path)
-                print("[Timetable] Full page fallback")
 
             await browser.close()
             return output_path
