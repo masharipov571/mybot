@@ -282,11 +282,11 @@ const app = {
             }
         });
 
-        // 1.5 soniya kutib keyingiga o'tish
+        // 0.8 soniya kutib keyingiga o'tish (tezkorlik uchun)
         setTimeout(() => {
             this.feedbackActive = false;
             this.nextQuestion();
-        }, 1500);
+        }, 800);
     },
 
     nextQuestion() {
