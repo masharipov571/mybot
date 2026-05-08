@@ -393,7 +393,40 @@ const app = {
     startChunk(start, end) {
         this.currentChunkStart     = start;
         this.currentChunkEnd       = end;
-        this.currentQuestions      = this.allQuestions.slice(start, end);
+        
+        // Savollardan nusxa olamiz (asl holatiga tegmaslik uchun)
+        this.currentQuestions = this.allQuestions.slice(start, end).map(q => {
+            const newQ = { ...q };
+            const options = [
+                { text: q.option_a, key: 'a' },
+                { text: q.option_b, key: 'b' },
+                { text: q.option_c, key: 'c' },
+                { text: q.option_d, key: 'd' }
+            ];
+            
+            // To'g'ri javob matnini saqlab qolamiz
+            const correctText = q['option_' + q.correct_option.toLowerCase()];
+
+            // Variantlarni aralashtiramiz (Fisher-Yates shuffle)
+            for (let i = options.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [options[i], options[j]] = [options[j], options[i]];
+            }
+
+            // Yangi tartibni savolga yuklaymiz
+            newQ.option_a = options[0].text;
+            newQ.option_b = options[1].text;
+            newQ.option_c = options[2].text;
+            newQ.option_d = options[3].text;
+
+            // To'g'ri javobning yangi kalitini aniqlaymiz
+            const newKeys = ['a', 'b', 'c', 'd'];
+            const newCorrectIdx = options.findIndex(o => o.text === correctText);
+            newQ.correct_option = newKeys[newCorrectIdx];
+
+            return newQ;
+        });
+
         this.currentQuestionIndex  = 0;
         this.userAnswers           = {};
         
