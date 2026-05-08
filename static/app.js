@@ -258,16 +258,35 @@ const app = {
 
     // ─── Javob tanlash ────────────────────────────────────────────────────
     selectOption(opt) {
+        if (this.feedbackActive) return;
+        this.feedbackActive = true;
+        
+        clearInterval(this.timerInterval);
+        
         const idx = this.currentQuestionIndex;
         this.userAnswers[idx] = opt;
+        const q = this.currentQuestions[idx];
+        const correctOpt = q.correct_option.toLowerCase();
 
-        // Tanlangan variantni ko'rsatish
-        document.querySelectorAll('.opt-card').forEach(el => el.classList.remove('selected'));
-        const selectedEl = document.getElementById(`opt_${opt}`);
-        if (selectedEl) selectedEl.classList.add('selected');
+        // Barcha variantlarni o'chirish va ranglarni berish
+        document.querySelectorAll('.opt-card').forEach(el => {
+            el.classList.add('disabled');
+            const elOpt = el.id.replace('opt_', '');
+            
+            if (elOpt === correctOpt) {
+                el.classList.add('correct');
+            } else if (elOpt === opt) {
+                el.classList.add('wrong-selected');
+            } else {
+                el.classList.add('wrong');
+            }
+        });
 
-        // 200ms kutib keyingiga o'tish
-        setTimeout(() => this.nextQuestion(), 200);
+        // 1.5 soniya kutib keyingiga o'tish
+        setTimeout(() => {
+            this.feedbackActive = false;
+            this.nextQuestion();
+        }, 1500);
     },
 
     nextQuestion() {
