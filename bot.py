@@ -281,4 +281,18 @@ async def run_bot():
     from scheduler import scheduler_loop
     asyncio.create_task(scheduler_loop(bot))
 
+    # WebApp menyu tugmasini o'rnatish ("Open" tugmasi)
+    try:
+        from aiogram.types import MenuButtonWebApp, WebAppInfo
+        if WEBAPP_URL:
+            await bot.set_chat_menu_button(
+                menu_button=MenuButtonWebApp(
+                    text="Open",
+                    web_app=WebAppInfo(url=WEBAPP_URL)
+                )
+            )
+            logger.info("✅ WebApp Menu Button ('Open') o'rnatildi")
+    except Exception as e:
+        logger.error(f"❌ Menu button o'rnatishda xato: {e}")
+
     await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
