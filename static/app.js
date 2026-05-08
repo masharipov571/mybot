@@ -539,7 +539,12 @@ const app = {
     switchAdminTab(tab) {
         this.currentAdminTab = tab;
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-        const tabEl = document.getElementById(tab === 'quizzes' ? 'tabQuizzes' : 'tabUsers');
+        
+        let tabId = 'tabQuizzes';
+        if (tab === 'results') tabId = 'tabResults';
+        if (tab === 'users')   tabId = 'tabUsers';
+        
+        const tabEl = document.getElementById(tabId);
         if (tabEl) tabEl.classList.add('active');
         this.loadAdminPanel(tab);
     },
@@ -587,27 +592,47 @@ const app = {
                     </div>
                 `).join('');
 
-            } else {
-                // Foydalanuvchilar
+            } else if (tab === 'results') {
+                // Test ishlaganlar (Statistika)
                 const res  = await fetch(`/api/admin/users?telegram_id=${this.user.id}`);
                 if (!res.ok) throw new Error('Forbidden');
                 const data = await res.json();
-
-                if (data.length === 0) {
-                    container.innerHTML = '<p class="empty-hint">📭 Foydalanuvchilar yo\'q.</p>';
+                
+                const activeUsers = data.filter(u => u.results_count > 0);
+                if (activeUsers.length === 0) {
+                    container.innerHTML = '<p class="empty-hint">📭 Hali hech kim test ishlamadi.</p>';
                     return;
                 }
 
-                container.innerHTML = data.map(u => `
+                container.innerHTML = activeUsers.map(u => `
                     <div class="admin-user-card">
-                        <div class="au-avatar">${(u.first_name[0] || 'U').toUpperCase()}</div>
+                        <div class="au-avatar" style="background:var(--success-light); color:var(--success)">${(u.first_name[0] || 'U').toUpperCase()}</div>
                         <div class="au-info">
                             <div class="au-name">${u.first_name}</div>
                             <div class="au-un">${u.username ? '@' + u.username : 'ID: ' + u.telegram_id}</div>
                         </div>
-                        <div class="au-count">${u.results_count} test</div>
+                        <div class="au-count">${u.results_count} ta test</div>
                     </div>
                 `).join('');
+
+            } else {
+                // Barcha foydalanuvchilar (Start bosganlar)
+                const res  = await fetch(`/api/admin/users?telegram_id=${this.user.id}`);
+                if (!res.ok) throw new Error('Forbidden');
+                const data = await res.json();
+
+                container.innerHTML = `
+                    <div style="padding:10px; font-size:0.8rem; color:var(--text-dim);">Jami foydalanuvchilar: ${data.length} ta</div>
+                    ${data.map(u => `
+                        <div class="admin-user-card">
+                            <div class="au-avatar">${(u.first_name[0] || 'U').toUpperCase()}</div>
+                            <div class="au-info">
+                                <div class="au-name">${u.first_name}</div>
+                                <div class="au-un">${u.username ? '@' + u.username : 'ID: ' + u.telegram_id}</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                `;
             }
         } catch (e) {
             container.innerHTML = '<p class="empty-hint">❌ Ruxsat yo\'q yoki xatolik.</p>';
