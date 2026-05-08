@@ -151,9 +151,12 @@ const app = {
 
                     if (!res.ok) throw new Error('Server xatoligi');
                     const data = await res.json();
+                    
+                    // Natijani ko'rsatish
+                    const codeDisplay = document.getElementById('displayQuizCode');
+                    if (codeDisplay) codeDisplay.textContent = data.code;
+                    this.showView('quizCreatedView');
 
-                    tg.showAlert(`✅ Quiz yaratildi!\n\n🔢 Kod: ${data.code}\n📝 Savollar: ${data.total_questions} ta\n\nKodni boshqalarga yuboring!`);
-                    this.showView('mainMenu');
                 } catch (err) {
                     tg.showAlert('❌ ' + (err.message === 'Noto\'g\'ri format'
                         ? 'JSON fayl formati noto\'g\'ri!\nChatGPT dan olingan faylni tekshiring.'
@@ -188,12 +191,9 @@ const app = {
             }
 
             this.currentQuiz          = data;
-            this.currentQuestions     = data.questions;
-            this.currentQuestionIndex = 0;
-            this.userAnswers          = {};
+            this.allQuestions         = data.questions; 
+            this.showChunks(); 
 
-            this.showView('takingQuizView');
-            this.renderQuestion();
         } catch (e) {
             tg.showAlert(`❌ Quiz topilmadi!\n\nKodni tekshiring: ${code}`);
         } finally {
@@ -320,21 +320,74 @@ const app = {
 
         this.showView('quizResultView');
 
+        // Qayta yechish uchun ma'lumotlarni saqlaymiz
+        this.lastChunkInfo = { start: this.currentChunkStart, end: this.currentChunkEnd };
+
         // Natijani bazaga saqlash
         try {
+            const rangeStr = `${this.currentChunkStart + 1}-${Math.min(this.currentChunkEnd, this.allQuestions.length)}`;
             await fetch('/api/result', {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body:    JSON.stringify({
                     telegram_id:     this.user.id,
                     quiz_code:       this.currentQuiz.code,
-                    chunk_range:     `1-${total}`,
+                    chunk_range:     rangeStr,
                     correct_count:   correct,
                     incorrect_count: wrong
                 })
             });
         } catch (e) {
             console.warn('Result save failed:', e);
+        }
+    },
+
+    // ─── Bloklarni ko'rsatish ──────────────────────────────────────────────
+    showChunks() {
+        const total = this.allQuestions.length;
+        const chunkSize = 25;
+        const container = document.getElementById('chunksContainer');
+        container.innerHTML = '';
+        
+        document.getElementById('chunkQuizTitle').textContent = `Quiz #${this.currentQuiz.code}`;
+
+        for (let i = 0; i < total; i += chunkSize) {
+            const start = i;
+            const end   = Math.min(i + chunkSize, total);
+            const card  = document.createElement('div');
+            card.className = 'menu-card';
+            card.innerHTML = `
+                <div class="card-icon blue">📝</div>
+                <div class="card-text">
+                    <span class="card-title">${start + 1} - ${end} savollar</span>
+                    <span class="card-desc">Ushbu blokni yechish</span>
+                </div>
+                <span class="card-arrow">›</span>
+            `;
+            card.onclick = () => this.startChunk(start, end);
+            container.appendChild(card);
+        }
+        this.showView('quizChunksView');
+    },
+
+    // ─── Blokni boshlash ──────────────────────────────────────────────────
+    startChunk(start, end) {
+        this.currentChunkStart     = start;
+        this.currentChunkEnd       = end;
+        this.currentQuestions      = this.allQuestions.slice(start, end);
+        this.currentQuestionIndex  = 0;
+        this.userAnswers           = {};
+        
+        this.showView('takingQuizView');
+        this.renderQuestion();
+    },
+
+    // ─── Qayta yechish ────────────────────────────────────────────────────
+    retryQuiz() {
+        if (this.lastChunkInfo) {
+            this.startChunk(this.lastChunkInfo.start, this.lastChunkInfo.end);
+        } else {
+            this.showView('mainMenu');
         }
     },
 
@@ -523,6 +576,19 @@ const app = {
                 tg.showAlert('❌ O\'chirishda xatolik!');
             }
         });
+    },
+
+    // ─── Kodni nusxalash ──────────────────────────────────────────────────
+    copyQuizCode() {
+        const code = document.getElementById('displayQuizCode')?.textContent || '';
+        if (code) {
+            navigator.clipboard.writeText(code).then(() => {
+                tg.showAlert(`📋 Kod nusxalandi: ${code}`);
+            }).catch(() => {
+                // Clipboard API ishlamasa (ba'zi brauzerlarda)
+                tg.showAlert(`Kodni qo'lda nusxalang: ${code}`);
+            });
+        }
     }
 };
 
