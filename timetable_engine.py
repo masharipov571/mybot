@@ -29,77 +29,46 @@ async def get_timetable_screenshot(group_name: str) -> str | None:
             )
             page = await browser.new_page(viewport={"width": 1280, "height": 900})
 
-            print(f"[Timetable] Opening TSUE timetable for group: {group_name}")
-            await page.goto("https://tsue.edupage.org/timetable/", timeout=30000)
-            await page.wait_for_load_state("networkidle", timeout=20000)
+            print(f"[Timetable] Fetching: {group_name}")
+            # Sahifa yuklanishini kutamiz (faqat DOM tayyor bo'lishi kifoya)
+            await page.goto("https://tsue.edupage.org/timetable/", wait_until="domcontentloaded", timeout=20000)
 
-            # Sahifani o'zbek tiliga o'tkazish (agar kerak bo'lsa)
+            # 1. "Sinflar" (Классы) menyusini darhol bosish
             try:
-                await page.select_option("select[name='lang']", "uz")
-                await page.wait_for_timeout(1000)
-            except Exception:
-                pass  # Til tanlash bo'lmasa ham davom etamiz
+                # 'Sinflar' yoki '.as-menu-item-label' kabi elementni tezkor bosish
+                await page.click(".as-menu-item-label", timeout=3000)
+            except:
+                await page.click("text=Sinflar", timeout=2000) rescue None
 
-            # Guruh qidirish maydonini topish
-            # Sayt turli xil selector ishlatishi mumkin
-            group_selectors = [
-                "input[placeholder*='guruh']",
-                "input[placeholder*='group']",
-                "input[placeholder*='Guruh']",
-                ".search-input",
-                "input[type='search']",
-                "input[type='text']"
-            ]
+            # 2. Guruhni topish va tanlash (JS orqali tezroq)
+            # Ro'yxat paydo bo'lishi bilan uning ichidan guruhni topamiz
+            try:
+                # Guruhni matn bo'yicha qidirib, darhol click qilamiz
+                await page.wait_for_selector(f"text={group_name}", timeout=3000)
+                await page.click(f"text={group_name}")
+                print(f"[Timetable] Group {group_name} clicked.")
+            except:
+                # Agar ro'yxatda topilmasa, qidiruv (typing) qilib ko'ramiz
+                await page.keyboard.type(group_name)
+                await page.keyboard.press("Enter")
 
-            input_found = False
-            for selector in group_selectors:
-                try:
-                    await page.wait_for_selector(selector, timeout=3000)
-                    await page.fill(selector, group_name)
-                    await page.wait_for_timeout(500)
-                    await page.press(selector, "Enter")
-                    input_found = True
-                    print(f"[Timetable] Used selector: {selector}")
-                    break
-                except Exception:
-                    continue
+            # 3. Jadval yuklanishini kutish (element paydo bo'lguncha)
+            try:
+                await page.wait_for_selector("div.print-nobreak, .timetable", timeout=4000)
+            except:
+                pass # Agar chiqmasa, fallback screenshotga o'tadi
 
-            if not input_found:
-                # URL orqali urinib ko'rish
-                encoded = group_name.replace("/", "%2F").replace(" ", "+")
-                await page.goto(
-                    f"https://tsue.edupage.org/timetable/?group={encoded}",
-                    timeout=15000
-                )
-
-            await page.wait_for_timeout(3000)
-
-            # Jadval elementini crop qilish
-            timetable_selectors = [
-                ".timetable",
-                "#timetable",
-                ".schedule",
-                ".week-timetable",
-                "table.main",
-                "main"
-            ]
-
-            screenshot_taken = False
-            for sel in timetable_selectors:
-                try:
-                    element = await page.query_selector(sel)
-                    if element:
-                        await element.screenshot(path=output_path)
-                        screenshot_taken = True
-                        print(f"[Timetable] Screenshot taken for: {group_name}")
-                        break
-                except Exception:
-                    continue
-
-            if not screenshot_taken:
-                # Butun sahifani screenshot qilish
-                await page.screenshot(path=output_path, full_page=False)
-                print(f"[Timetable] Full page screenshot for: {group_name}")
+            # Animatsiya tugashi uchun juda qisqa kutish
+            await page.wait_for_timeout(300)
+            
+            # Screenshot olish
+            target = await page.query_selector("div.print-nobreak") or await page.query_selector(".timetable")
+            if target:
+                await target.screenshot(path=output_path)
+                print(f"[Timetable] Fast click screenshot done for {group_name}")
+            else:
+                await page.screenshot(path=output_path)
+                print("[Timetable] Full page fallback")
 
             await browser.close()
             return output_path
