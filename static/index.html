@@ -67,7 +67,7 @@
                     <span class="card-arrow">›</span>
                 </div>
 
-                <div class="menu-card" id="card-timetable" onclick="app.closeToBot('📅 Dars jadvali uchun botdagi \"📅 Dars Jadvali\" tugmasini bosing!')">
+                <div class="menu-card" id="card-timetable" onclick="app.closeToBot('Dars jadvali uchun botdagi tugmani bosing!')">
                     <div class="card-icon red">📅</div>
                     <div class="card-text">
                         <span class="card-title">Dars Jadvali</span>
@@ -109,11 +109,11 @@
             </div>
 
             <div class="form-card">
-                <label class="form-label">⏱ Savol boshiga vaqt (sekund)</label>
+                <label class="form-label" for="timerInput">⏱ Savol boshiga vaqt (sekund)</label>
                 <input type="number" id="timerInput" value="30" min="5" max="120"
                        placeholder="Masalan: 30">
 
-                <label class="form-label">📁 JSON fayl</label>
+                <label class="form-label" for="quizJsonFile">📁 JSON fayl</label>
                 <div class="file-upload-area" id="fileUploadArea">
                     <span id="fileUploadText">Faylni tanlash uchun bosing</span>
                     <input type="file" id="quizJsonFile" accept=".json"
@@ -127,7 +127,7 @@
             </div>
 
             <!-- Prompt matni (yashirin) -->
-            <div id="promptText" style="display:none;">Ushbu fayldagi BARCHA savollarni o'qib chiq, bittasini ham qoldirma. Savollarni aslo qisqartirma yoki o'zgartirma. Agar savollarda tayyor variantlar bo'lsa, ularni va to'g'ri javobni ajratib JSON formatga o'tkaz. Agar variantlar bo'lmasa, o'zing har bir savol uchun aniq, faktik to'g'ri keladigan 4 ta mantiqiy variant o'ylab top. MUHIM: To'g'ri javobni doim 'A' varianti qilib qo'yma, uni A, B, C, D orasida tasodifiy (random) qilib joylashtir! Menga to'liq ro'yxatni faqatgina yuklab olish mumkin bo'lgan '.json' fayl ko'rinishida taqdim et. Format shunday bo'lsun: [{"text": "Savol", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "c"}]</div>
+            <div id="promptText" style="display:none;">Ushbu fayldagi barcha savollarni JSON formatga o'tkaz. To'g'ri javobni random holda joylashtir. Format: [{"text": "Savol", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "c"}]</div>
         </div>
 
         <!-- ═══════════════════════ QUIZGA KIRISH ═══════════════════════ -->
@@ -142,6 +142,7 @@
                 <p class="center-label">6 xonali quiz kodini kiriting</p>
                 <input type="text" id="joinCodeInput" maxlength="6"
                        class="code-input" placeholder="_ _ _ _ _ _"
+                       autocomplete="off" autocorrect="off" autocapitalize="none"
                        oninput="app.handleCodeInput(this)">
                 <button class="btn-primary full-width" id="joinQuizBtn"
                         onclick="app.joinQuiz()">
@@ -195,7 +196,7 @@
             <div class="stats-grid">
                 <div class="stat-box">
                     <span class="sb-val" id="stTotal">—</span>
-                    <span class="sb-lbl">Jami Test</span>
+                    <span class="sb-lbl">Jami</span>
                 </div>
                 <div class="stat-box success">
                     <span class="sb-val" id="stCorrect">—</span>
@@ -203,13 +204,12 @@
                 </div>
                 <div class="stat-box danger">
                     <span class="sb-val" id="stWrong">—</span>
-                    <span class="sb-lbl">Noto'g'ri</span>
+                    <span class="sb-lbl">Xato</span>
                 </div>
             </div>
 
             <div class="avg-card">
-                <div class="circle-progress" id="avgCircle" data-text="0%"
-                     style="--progress: 0deg;"></div>
+                <div class="circle-progress" id="avgCircle" data-text="0%"></div>
                 <div class="avg-info">
                     <p class="avg-sub">O'rtacha natija</p>
                     <h3 id="avgText">—</h3>
@@ -218,7 +218,7 @@
 
             <h3 class="section-title">Tarix</h3>
             <div id="resultsContainer" class="results-list">
-                <p class="empty-hint">Natijalar yuklanmoqda...</p>
+                <p class="empty-hint">Yuklanmoqda...</p>
             </div>
         </div>
 
