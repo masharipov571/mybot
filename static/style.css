@@ -396,10 +396,46 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
     flex-shrink: 0; color: var(--text-dim);
     transition: all 0.15s;
 }
-.opt-card.selected .opt-label {
+.opt-card.selected {
     border-color: var(--primary);
-    background: var(--primary);
-    color: white;
+    background: var(--primary-light);
+    transform: translateY(-2px);
+}
+
+/* To'g'ri javob */
+.opt-card.correct {
+    border-color: var(--success) !important;
+    background: rgba(16, 185, 129, 0.15) !important;
+    color: #10b981 !important;
+    box-shadow: 0 0 15px rgba(16, 185, 129, 0.2);
+}
+.opt-card.correct .opt-label {
+    background: var(--success) !important;
+    color: white !important;
+}
+
+/* Xato javob (boshqalar) */
+.opt-card.wrong {
+    border-color: var(--danger) !important;
+    background: rgba(239, 68, 68, 0.05) !important;
+    opacity: 0.7;
+}
+
+/* Aynan foydalanuvchi tanlagan xato javob (to'q qizil) */
+.opt-card.wrong-selected {
+    border-color: #991b1b !important; /* To'q qizil */
+    background: rgba(153, 27, 27, 0.2) !important;
+    color: #991b1b !important;
+    box-shadow: 0 0 15px rgba(153, 27, 27, 0.2);
+    transform: scale(0.98);
+}
+.opt-card.wrong-selected .opt-label {
+    background: #991b1b !important;
+    color: white !important;
+}
+
+.opt-card.disabled {
+    pointer-events: none;
 }
 
 .quiz-nav {
@@ -462,7 +498,7 @@ input:focus { outline: none; border-color: var(--primary); background: white; }
 .circle-progress {
     width: 72px; height: 72px;
     border-radius: 50%;
-    background: conic-gradient(var(--primary) var(--progress, 0deg), var(--border) 0deg);
+    background: conic-gradient(var(--primary) calc(var(--progress, 0) * 1deg), var(--border) 0deg);
     display: flex; align-items: center; justify-content: center;
     position: relative; flex-shrink: 0;
 }
