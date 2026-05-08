@@ -44,4 +44,5 @@ RUN mkdir -p /data /app/static
 
 EXPOSE 8080
 
-CMD ["python", "migrate.py", "&&", "python", "main.py"]
+CMD python migrate.py && python main.py
+
