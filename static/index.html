@@ -130,6 +130,29 @@
             <div id="promptText" style="display:none;">Ushbu fayldagi barcha savollarni JSON formatga o'tkaz. To'g'ri javobni random holda joylashtir. Format: [{"text": "Savol", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "c"}]</div>
         </div>
 
+        <!-- ═══════════════════════ QUIZ YARATILDI (SUCCESS) ═══════════════════════ -->
+        <div id="quizCreatedView" class="view center-view">
+            <div class="center-card">
+                <div class="big-emoji">🎉</div>
+                <h2 style="margin-bottom:8px;">Quiz Tayyor!</h2>
+                <p class="center-label">Boshqalar ushbu kod bilan qo'shilishlari mumkin:</p>
+                
+                <div class="code-input" id="displayQuizCode" 
+                     style="background:var(--primary-light); color:var(--primary); margin:20px 0; border:2px dashed var(--primary);">
+                    000000
+                </div>
+
+                <button class="btn-primary full-width" onclick="app.copyQuizCode()">
+                    📋 Kodni Nusxalash
+                </button>
+                
+                <button class="btn-secondary full-width" style="margin-top:12px;"
+                        onclick="app.showView('mainMenu')">
+                    🏠 Asosiy Menyu
+                </button>
+            </div>
+        </div>
+
         <!-- ═══════════════════════ QUIZGA KIRISH ═══════════════════════ -->
         <div id="joinQuizView" class="view">
             <div class="page-header">
@@ -148,6 +171,23 @@
                         onclick="app.joinQuiz()">
                     🚀 Boshlash
                 </button>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════ TEST BLOKLARINI TANLASH ═══════════════════════ -->
+        <div id="quizChunksView" class="view">
+            <div class="page-header">
+                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
+                <h2 id="chunkQuizTitle">Blokni tanlang</h2>
+            </div>
+            
+            <div class="info-card">
+                <p class="info-title">💡 Bilimni mustahkamlang</p>
+                <p class="info-desc">Har bir blok 25 ta savoldan iborat. Bir blokni bir necha marta yechish tavsiya etiladi.</p>
+            </div>
+
+            <div id="chunksContainer" class="menu-grid">
+                <!-- Bloklar JS orqali qo'shiladi -->
             </div>
         </div>
 
@@ -181,9 +221,15 @@
                 <p class="score-label" id="finalScoreLabel">Baholanmoqda...</p>
             </div>
             <div class="result-details" id="resultDetails"></div>
-            <button class="btn-primary full-width" onclick="app.showView('mainMenu')">
-                🏠 Asosiy Menyu
-            </button>
+            
+            <div style="width:100%; display:flex; flex-direction:column; gap:10px;">
+                <button class="btn-primary full-width" onclick="app.retryQuiz()">
+                    🔄 Qayta Yechish
+                </button>
+                <button class="btn-secondary full-width" onclick="app.showView('mainMenu')">
+                    🏠 Asosiy Menyu
+                </button>
+            </div>
         </div>
 
         <!-- ═══════════════════════ NATIJALAR TARIXI ═══════════════════════ -->
