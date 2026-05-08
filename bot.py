@@ -19,11 +19,11 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(mes
 logger = logging.getLogger(__name__)
 
 # ─── Sozlamalar ────────────────────────────────────────────────────────────────
-TOKEN = os.getenv("BOT_TOKEN")
-WEBAPP_URL = os.getenv("WEBAPP_URL", "").rstrip("/")
+TOKEN = os.getenv("BOT_TOKEN", "").strip()
+WEBAPP_URL = os.getenv("WEBAPP_URL", "").strip().rstrip("/")
 
 if not TOKEN:
-    logger.critical("❌ BOT_TOKEN topilmadi! Railway > Variables ga qo'shing.")
+    logger.critical(f"❌ BOT_TOKEN topilmadi! Hozirgi qiymat: '{TOKEN}'")
     raise SystemExit(1)
 
 if not WEBAPP_URL:
