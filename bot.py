@@ -37,14 +37,16 @@ dp = Dispatcher()
 class TimetableForm(StatesGroup):
     waiting_for_group = State()
 
-
 class SubscribeForm(StatesGroup):
     waiting_for_group = State()
     waiting_for_time = State()
 
+class AdminBroadcast(StatesGroup):
+    waiting_for_message = State()
+    waiting_for_button = State()
 
 # ─── Yordamchi funksiyalar ─────────────────────────────────────────────────────
-def get_main_keyboard() -> ReplyKeyboardMarkup:
+def get_main_keyboard(user_id: int = None) -> ReplyKeyboardMarkup:
     """Asosiy menyu tugmalari"""
     buttons = [
         [KeyboardButton(
@@ -57,9 +59,11 @@ def get_main_keyboard() -> ReplyKeyboardMarkup:
         ],
         [KeyboardButton(text="❌ Obunani Bekor Qilish")]
     ]
-    # WEBAPP_URL yo'q bo'lsa, oddiy tugma
-    if not WEBAPP_URL:
-        buttons[0] = [KeyboardButton(text="📚 Quiz")]
+    
+    # Admin tekshiruvi
+    from api import is_admin
+    if user_id and is_admin(str(user_id)):
+        buttons.append([KeyboardButton(text="📢 Xabar yuborish")])
 
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
 
@@ -97,13 +101,100 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
     await message.answer(
         f"👋 Assalomu alaykum, <b>{message.from_user.first_name}</b>!\n\n"
-        f"🎓 <b>TSUE Study Assistant</b> botiga xush kelibsiz.\n\n"
-        f"📚 Bu bot orqali:\n"
-        f"• Quiz testlarini ishlashingiz\n"
-        f"• Dars jadvalingizni ko'rishingiz\n"
-        f"• Kundalik jadval xabarnomalariga obuna bo'lishingiz mumkin!",
+        f"🎓 <b>TSUE Study Assistant</b> botiga xush kelibsiz.",
         parse_mode="HTML",
-        reply_markup=get_main_keyboard()
+        reply_markup=get_main_keyboard(message.from_user.id)
+    )
+
+# ─── Admin Broadcast ───────────────────────────────────────────────────────────
+
+@dp.message(lambda m: m.text == "📢 Xabar yuborish")
+async def broadcast_start(message: types.Message, state: FSMContext):
+    from api import is_admin
+    if not is_admin(str(message.from_user.id)):
+        return
+    
+    await state.set_state(AdminBroadcast.waiting_for_message)
+    await message.answer(
+        "📝 <b>Xabarni yuboring.</b>\n\nBu matn, rasm yoki video bo'lishi mumkin. Bot uni barcha foydalanuvchilarga tarqatadi.",
+        parse_mode="HTML",
+        reply_markup=ReplyKeyboardMarkup(
+            keyboard=[[KeyboardButton(text="❌ Bekor qilish")]],
+            resize_keyboard=True
+        )
+    )
+
+@dp.message(AdminBroadcast.waiting_for_message)
+async def broadcast_receive_msg(message: types.Message, state: FSMContext):
+    if message.text == "❌ Bekor qilish":
+        await state.clear()
+        return await message.answer("Bekor qilindi.", reply_markup=get_main_keyboard(message.from_user.id))
+
+    await state.update_data(msg_id=message.message_id, chat_id=message.chat.id)
+    
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="Tugmasiz yuborish", callback_data="bc_no_btn")],
+        [InlineKeyboardButton(text="➕ Tugma qo'shish (Link)", callback_data="bc_add_btn")]
+    ])
+    
+    await state.set_state(AdminBroadcast.waiting_for_button)
+    await message.answer("Xabarga havola (link) tugmasini qo'shishni xohlaysizmi?", reply_markup=kb)
+
+@dp.callback_query(AdminBroadcast.waiting_for_button, lambda c: c.data == "bc_no_btn")
+async def bc_send_now(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer("Yuborilmoqda...")
+    data = await state.get_data()
+    await start_broadcasting(callback.message, data['msg_id'], data['chat_id'], None)
+    await state.clear()
+
+@dp.callback_query(AdminBroadcast.waiting_for_button, lambda c: c.data == "bc_add_btn")
+async def bc_ask_btn_data(callback: types.CallbackQuery):
+    await callback.message.answer("Tugma matni va havolasini quyidagi formatda yuboring:\n\n<code>Tugma nomi | https://google.com</code>")
+    await callback.answer()
+
+@dp.message(AdminBroadcast.waiting_for_button)
+async def bc_final_with_btn(message: types.Message, state: FSMContext):
+    if "|" not in message.text:
+        return await message.answer("Xato format! Namuna: <code>Batafsil | https://t.me/...</code>", parse_mode="HTML")
+    
+    parts = message.text.split("|")
+    btn_text = parts[0].strip()
+    btn_url = parts[1].strip()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=btn_text, url=btn_url)]])
+    
+    data = await state.get_data()
+    await start_broadcasting(message, data['msg_id'], data['chat_id'], kb)
+    await state.clear()
+
+async def start_broadcasting(msg_to_send, msg_id, chat_id, reply_markup):
+    db = SessionLocal()
+    users = db.query(User).all()
+    db.close()
+    
+    count, blocked = 0, 0
+    status_msg = await msg_to_send.answer(f"🚀 Tarqatish boshlandi... (0/{len(users)})")
+    
+    for user in users:
+        try:
+            await bot.copy_message(
+                chat_id=user.telegram_id,
+                from_chat_id=chat_id,
+                message_id=msg_id,
+                reply_markup=reply_markup
+            )
+            count += 1
+        except Exception:
+            blocked += 1
+        
+        if count % 20 == 0:
+            try: await status_msg.edit_text(f"⏳ Tarqatilmoqda... ({count}/{len(users)})")
+            except Exception: pass
+            await asyncio.sleep(0.5)
+
+    await msg_to_send.answer(
+        f"✅ <b>Xabar tarqatildi!</b>\n\n👤 Qabul qildi: {count}\n🚫 Bloklagan: {blocked}",
+        parse_mode="HTML",
+        reply_markup=get_main_keyboard(msg_to_send.chat.id)
     )
 
 
