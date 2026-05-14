@@ -220,10 +220,15 @@ const app = {
         this.currentQuestions.forEach((q, idx) => {
             if (this.userAnswers[idx] === q.correct_option.toLowerCase()) correct++;
         });
+        const wrong = this.currentQuestions.length - correct;
         const perc = Math.round((correct / this.currentQuestions.length) * 100);
-        document.getElementById('finalScoreDisplay').innerHTML = `
-            <div>${perc}%</div>
-            <button class="btn-secondary" style="margin-top:20px; width:100%;" onclick="app.startQuizChunk(${this.chunkRange.split('-')[0]}, ${this.chunkRange.split('-')[1]})">Qayta yechish 🔄</button>
+        
+        document.getElementById('finalScoreDisplay').textContent = `${perc}%`;
+        document.getElementById('finalCorrect').textContent = correct;
+        document.getElementById('finalWrong').textContent = wrong;
+        
+        document.getElementById('repeatBtnContainer').innerHTML = `
+            <button class="btn-secondary" style="width:100%;" onclick="app.startQuizChunk(${this.chunkRange.split('-')[0]}, ${this.chunkRange.split('-')[1]})">Qayta yechish 🔄</button>
         `;
 
         try {
@@ -235,7 +240,7 @@ const app = {
                     quiz_code: this.currentQuiz.code,
                     chunk_range: this.chunkRange,
                     correct_count: correct,
-                    incorrect_count: this.currentQuestions.length - correct
+                    incorrect_count: wrong
                 })
             });
         } catch (e) { }
@@ -268,17 +273,22 @@ const app = {
             document.getElementById('avgText').textContent = avg >= 80 ? "A'lo" : (avg >= 60 ? "Yaxshi" : "Past");
 
             container.innerHTML = data.map(r => {
-                const p = Math.round((r.correct_count / (r.correct_count + r.incorrect_count)) * 100);
+                const total = r.correct_count + r.incorrect_count;
+                const perc = total > 0 ? Math.round((r.correct_count / total) * 100) : 0;
                 return `
                     <div class="history-item">
-                        <div class="h-icon">📝</div>
+                        <div class="h-icon" style="background:${perc > 60 ? '#dcfce7' : '#fee2e2'}; color:${perc > 60 ? '#166534' : '#991b1b'};">
+                            ${perc > 60 ? '✅' : '❌'}
+                        </div>
                         <div class="h-content">
-                            <div class="h-name">Quiz #${r.quiz_code}</div>
-                            <div class="h-date">${new Date(r.date).toLocaleDateString()}</div>
+                            <div class="h-name">KOD: ${r.quiz_code} (${r.chunk_range})</div>
+                            <div class="h-date">${new Date(r.date).toLocaleString()}</div>
+                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">
+                                To'g'ri: ${r.correct_count} | Xato: ${r.incorrect_count}
+                            </div>
                         </div>
                         <div class="h-score-wrap">
-                            <span class="h-perc" style="color:${p >= 60 ? 'var(--success)' : 'var(--danger)'}; background:${p >= 60 ? '#f0fdf4' : '#fef2f2'};">${p}%</span>
-                            <div class="h-total">${r.correct_count}/${r.correct_count + r.incorrect_count}</div>
+                            <span class="h-perc" style="color:${perc >= 60 ? 'var(--success)' : 'var(--danger)'}; background:${perc >= 60 ? '#f0fdf4' : '#fef2f2'};">${perc}%</span>
                         </div>
                     </div>
                 `;
