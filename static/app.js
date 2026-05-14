@@ -376,24 +376,28 @@ const app = {
                 return;
             }
             container.innerHTML = data.map(q => `
-                <div class="history-item" onclick="app.joinQuizByCode('${q.code}')" style="cursor:pointer; transition: transform 0.2s;">
+                <div class="history-item" onclick="app.copyQuizCode('${q.code}')" style="cursor:pointer; border-left: 4px solid var(--primary);">
                     <div class="h-icon" style="background:#e0e7ff; color:#4338ca;">🔑</div>
                     <div class="h-content">
                         <div class="h-name">${q.title}</div>
-                        <div class="h-date">KOD: ${q.code} • ${q.total_questions} savol</div>
+                        <div class="h-date">${q.total_questions} ta savol</div>
                     </div>
                     <div class="h-score-wrap">
-                        <span class="h-perc" style="background:#6366f1; color:white; padding:4px 12px; border-radius:20px;">KIRISH</span>
+                        <div style="font-family:monospace; font-size:1.2rem; font-weight:800; color:var(--primary); background:#f1f5f9; padding:4px 12px; border-radius:8px; border:1px dashed var(--primary);">${q.code}</div>
+                        <div style="font-size:0.6rem; color:var(--text-dim); text-align:center; margin-top:4px;">NUSXALASH</div>
                     </div>
                 </div>
             `).join('');
         } catch (e) { container.innerHTML = 'Xatolik yuz berdi.'; }
     },
 
-    joinQuizByCode(code) {
-        document.getElementById('joinCodeInput').value = code;
-        this.joinQuiz();
-    }
+    copyQuizCode(code) {
+        navigator.clipboard.writeText(code).then(() => {
+            tg.showScanQrPopup({ text: "Kod nusxalandi! Endi 'Qo'shilish' bo'limiga o'tib, uni kiriting." });
+            setTimeout(() => tg.closeScanQrPopup(), 2000);
+            tg.showAlert("Kod nusxalandi: " + code);
+        });
+    },
 };
 
 window.onload = () => app.init();
