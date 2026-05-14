@@ -1,59 +1,52 @@
 import sqlite3
 import os
 
+DB_PATH = "/data/quiz_bot.db" if os.path.exists("/data") else "./quiz_bot.db"
 
 def migrate():
-    """
-    Mavjud bazaga yetishmayotgan ustunlarni qo'shadi.
-    Bu Railway'da eski bazalar bilan ishlaganda kerak bo'ladi.
-    """
-    db_path = "/data/quiz_bot.db" if os.path.exists("/data") else "./quiz_bot.db"
-
-    if not os.path.exists(db_path):
-        print(f"[Migrate] Baza topilmadi: {db_path} — Skip")
+    if not os.path.exists(DB_PATH):
+        print("Database does not exist yet. No migration needed.")
         return
 
-    print(f"[Migrate] Checking migrations in: {db_path}")
-    conn = sqlite3.connect(db_path)
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-
-    # Mavjud ustunlarni tekshirish yordamchi funksiyasi
-    def column_exists(table, column):
-        cursor.execute(f"PRAGMA table_info({table})")
-        cols = [row[1] for row in cursor.fetchall()]
-        return column in cols
-
+    
+    print(f"Checking for migrations in: {DB_PATH}")
+    
     # users jadvaliga is_admin qo'shish
-    if not column_exists("users", "is_admin"):
+    try:
         cursor.execute("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0")
         print("[+] Added is_admin to users table")
-
-    # results jadvaliga chunk_range qo'shish
-    if not column_exists("results", "chunk_range"):
-        cursor.execute("ALTER TABLE results ADD COLUMN chunk_range TEXT")
-        print("[+] Added chunk_range to results table")
-
-    # results jadvaliga date qo'shish
-    if not column_exists("results", "date"):
-        cursor.execute("ALTER TABLE results ADD COLUMN date DATETIME")
-        print("[+] Added date to results table")
-
-    # subscriptions jadvalini yaratish (agar mavjud bo'lmasa)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER UNIQUE,
-            group_name TEXT,
-            notification_time TEXT,
-            FOREIGN KEY (user_id) REFERENCES users(id)
-        )
-    """)
-    print("[+] Ensured subscriptions table exists")
+    except Exception as e: 
+        if "duplicate column name" in str(e).lower(): pass
+        else: print(f"[-] users error: {e}")
+    
+    # results jadvaliga kerakli ustunlarni qo'shish
+    cols_to_add = [
+        ("quiz_code", "TEXT"),
+        ("date", "DATETIME"),
+        ("chunk_range", "TEXT")
+    ]
+    
+    for col_name, col_type in cols_to_add:
+        try:
+            cursor.execute(f"ALTER TABLE results ADD COLUMN {col_name} {col_type}")
+            print(f"[+] Added {col_name} to results table")
+        except Exception as e:
+            if "duplicate column name" in str(e).lower(): pass
+            else: print(f"[-] results error ({col_name}): {e}")
+            
+    # quizzes jadvaliga title qo'shish
+    try:
+        cursor.execute("ALTER TABLE quizzes ADD COLUMN title TEXT")
+        print("[+] Added title to quizzes table")
+    except Exception as e:
+        if "duplicate column name" in str(e).lower(): pass
+        else: print(f"[-] quizzes error: {e}")
 
     conn.commit()
     conn.close()
-    print("[Migrate] Migration complete ✓")
-
+    print("Migration step completed.")
 
 if __name__ == "__main__":
     migrate()

@@ -1,316 +1,162 @@
 <!DOCTYPE html>
 <html lang="uz">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>TSUE Study Assistant</title>
-    <meta name="description" content="TSUE talabalariga mo'ljallangan quiz va dars jadvali platforma">
+    <title>TSUE Multi-Bot</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="app-container">
-
-        <!-- ═══════════════════════ DASHBOARD ═══════════════════════ -->
+        <!-- Dashboard -->
         <div id="mainMenu" class="view active">
-            <!-- Welcome Header -->
-            <div class="welcome-card">
-                <div class="welcome-left">
-                    <p class="welcome-sub">Xush kelibsiz 👋</p>
-                    <h1 id="userNameDisplay" class="welcome-name">YUKLANMOQDA</h1>
-                    <span class="badge-student">🎓 TSUE Talabasi</span>
+            <div class="welcome-section">
+                <div class="welcome-text">
+                    <p>Xush kelibsiz,</p>
+                    <h1 id="userNameDisplay">YUKLANMOQDA...</h1>
                 </div>
-                <div class="welcome-right">
-                    <div class="avatar-circle" id="userAvatar">T</div>
-                </div>
+                <img src="https://cdn-icons-png.flaticon.com/512/3074/3074058.png" class="illustration" alt="Study">
             </div>
 
-            <!-- Stats bar -->
-            <div class="stats-bar" id="quickStats" style="display:none;">
-                <div class="stat-pill">
-                    <span class="sp-num" id="qsTotalTests">0</span>
-                    <span class="sp-lbl">Test</span>
-                </div>
-                <div class="stat-pill success">
-                    <span class="sp-num" id="qsAvgScore">0%</span>
-                    <span class="sp-lbl">O'rtacha</span>
-                </div>
-            </div>
-
-            <!-- Menu Cards -->
-            <h3 class="section-title">Nima qilmoqchisiz?</h3>
+            <h3 style="margin-bottom: 16px;">Multi-Function Dashboard</h3>
             <div class="menu-grid">
-                <div class="menu-card" id="card-create" onclick="app.showView('createQuizView')">
-                    <div class="card-icon purple">📖</div>
-                    <div class="card-text">
-                        <span class="card-title">Quiz Yaratish</span>
-                        <span class="card-desc">JSON fayl yuklash</span>
-                    </div>
-                    <span class="card-arrow">›</span>
+                <div class="menu-card" onclick="app.showView('createQuizView')">
+                    <div class="icon-box" style="background: #7c3aed; color:white;">📖</div>
+                    <span class="menu-title">Quiz Yaratish</span>
+                    <span class="menu-desc">Yangi testlar yarating</span>
+                    <span class="arrow-icon">→</span>
                 </div>
-
-                <div class="menu-card" id="card-join" onclick="app.showView('joinQuizView')">
-                    <div class="card-icon amber">🎓</div>
-                    <div class="card-text">
-                        <span class="card-title">Quizga Kirish</span>
-                        <span class="card-desc">6 xonali kod</span>
-                    </div>
-                    <span class="card-arrow">›</span>
+                <div class="menu-card" onclick="app.showView('joinQuizView')">
+                    <div class="icon-box" style="background: #fbbf24; color:white;">🎓</div>
+                    <span class="menu-title">Qo'shilish</span>
+                    <span class="menu-desc">Testlarni ishlash</span>
+                    <span class="arrow-icon">→</span>
                 </div>
-
-                <div class="menu-card" id="card-results" onclick="app.showView('resultsView'); app.loadResults();">
-                    <div class="card-icon green">📈</div>
-                    <div class="card-text">
-                        <span class="card-title">Natijalarim</span>
-                        <span class="card-desc">Tarix va statistika</span>
-                    </div>
-                    <span class="card-arrow">›</span>
+                <div class="menu-card" onclick="app.showView('resultsView'); app.loadResults();">
+                    <div class="icon-box" style="background: #10b981; color:white;">📈</div>
+                    <span class="menu-title">Natijalar</span>
+                    <span class="menu-desc">O'z natijalaringizni ko'ring</span>
+                    <span class="arrow-icon">→</span>
                 </div>
-
-                <div class="menu-card" id="card-timetable" onclick="app.closeToBot('Dars jadvali uchun botdagi tugmani bosing!')">
-                    <div class="card-icon red">📅</div>
-                    <div class="card-text">
-                        <span class="card-title">Dars Jadvali</span>
-                        <span class="card-desc">Bot orqali olish</span>
-                    </div>
-                    <span class="card-arrow">›</span>
+                <div class="menu-card" onclick="app.closeToBot('Dars jadvalini bot menyusi orqali olishingiz mumkin!')">
+                    <div class="icon-box" style="background: #ef4444; color:white;">📅</div>
+                    <span class="menu-title">Dars Jadvali</span>
+                    <span class="menu-desc">Bot orqali ko'rish</span>
+                    <span class="arrow-icon">→</span>
                 </div>
-
-                <!-- Admin (yashirin, faqat adminlarga ko'rinadi) -->
-                <div class="menu-card admin-card" id="adminBtn" style="display:none;"
-                     onclick="app.showAdminAuth()">
-                    <div class="card-icon blue">🛡️</div>
-                    <div class="card-text">
-                        <span class="card-title">Admin Panel</span>
-                        <span class="card-desc">Tizimni boshqarish</span>
-                    </div>
-                    <span class="card-arrow">›</span>
+                <div id="adminBtn" class="menu-card" style="display: none;"
+                    onclick="app.showView('adminView'); app.loadAdminPanel();">
+                    <div class="icon-box" style="background: #3b82f6; color:white;">👤</div>
+                    <span class="menu-title">Admin Panel</span>
+                    <span class="menu-desc">Tizimni boshqarish</span>
+                    <span class="arrow-icon">→</span>
                 </div>
             </div>
         </div>
 
-        <!-- ═══════════════════════ QUIZ YARATISH ═══════════════════════ -->
+        <!-- Create Quiz View -->
         <div id="createQuizView" class="view">
-            <div class="page-header">
-                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
-                <h2>Yangi Quiz</h2>
+            <div onclick="app.showView('mainMenu')"
+                style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
+            <div class="welcome-section" style="flex-direction:column; align-items:flex-start; gap:12px;">
+                <h3>Yangi Quiz Yaratish</h3>
+                <p style="font-size:0.8rem; color:var(--text-dim);">ChatGPT uchun promptdan nusxa oling va JSON faylni
+                    yuklang.</p>
+                <button class="btn-primary" style="width:100%; padding:12px;" onclick="app.copyPrompt()">Promptdan nusxa
+                    olish</button>
             </div>
-
-            <div class="info-card">
-                <p class="info-title">📋 Qanday ishlaydi?</p>
-                <p class="info-desc">
-                    1. Quyidagi promptni ChatGPT ga yuboring<br>
-                    2. Olingan JSON faylni yuklang<br>
-                    3. Vaqtni belgilang va Quiz yarating
-                </p>
-                <button class="btn-outline" onclick="app.copyPrompt()" id="copyPromptBtn">
-                    📋 Promptni Nusxalash
-                </button>
+            <div class="welcome-section" style="flex-direction:column; gap:16px;">
+                <input type="text" id="quizTitleInput" placeholder="Fan nomi (Masalan: Matematika)">
+                <input type="number" id="timerInput" value="30" placeholder="Vaqt (sekund)">
+                <input type="file" id="quizJsonFile" accept=".json">
+                <button class="btn-primary" style="width:100%;" onclick="app.createQuiz()">Yaratish</button>
             </div>
-
-            <div class="form-card">
-                <label class="form-label" for="timerInput">⏱ Savol boshiga vaqt (sekund)</label>
-                <input type="number" id="timerInput" value="30" min="5" max="120"
-                       placeholder="Masalan: 30">
-
-                <label class="form-label" for="quizJsonFile">📁 JSON fayl</label>
-                <div class="file-upload-area" id="fileUploadArea">
-                    <span id="fileUploadText">Faylni tanlash uchun bosing</span>
-                    <input type="file" id="quizJsonFile" accept=".json"
-                           onchange="app.handleFileSelect(this)">
-                </div>
-
-                <button class="btn-primary full-width" id="createQuizBtn"
-                        onclick="app.createQuiz()">
-                    ✨ Quiz Yaratish
-                </button>
-            </div>
-
-            <!-- Prompt matni (yashirin) -->
-            <div id="promptText" style="display:none;">Ushbu fayldagi barcha savollarni JSON formatga o'tkaz. To'g'ri javobni random holda joylashtir. Format: [{"text": "Savol", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D", "correct_option": "c"}]</div>
+            <div id="promptText" style="display:none;">Ushbu fayldagi BARCHA savollarni o'qib chiq, bittasini ham
+                qoldirma. Savollarni aslo qisqartirma yoki o'zgartirma. Agar savollarda tayyor variantlar bo'lsa, ularni
+                va to'g'ri javobni ajratib JSON formatga o'tkaz. Agar variantlar bo'lmasa, o'zing har bir savol uchun
+                aniq, faktik to'g'ri keladigan 4 ta mantiqiy variant o'ylab top. MUHIM: To'g'ri javobni doim 'A'
+                varianti qilib qo'yma, uni A, B, C, D orasida tasodifiy (random) qilib joylashtir! Menga to'liq
+                ro'yxatni faqatgina yuklab olish mumkin bo'lgan '.json' fayl ko'rinishida taqdim et. Format shunday
+                bo'lsun: [{"text": "Savol", "option_a": "A", "option_b": "B", "option_c": "C", "option_d": "D",
+                "correct_option": "c"}]</div>
         </div>
 
-        <!-- ═══════════════════════ QUIZ YARATILDI (SUCCESS) ═══════════════════════ -->
-        <div id="quizCreatedView" class="view center-view">
-            <div class="center-card">
-                <div class="big-emoji">🎉</div>
-                <h2 style="margin-bottom:8px;">Quiz Tayyor!</h2>
-                <p class="center-label">Boshqalar ushbu kod bilan qo'shilishlari mumkin:</p>
-                
-                <div class="code-input" id="displayQuizCode" 
-                     style="background:var(--primary-light); color:var(--primary); margin:20px 0; border:2px dashed var(--primary);">
-                    000000
-                </div>
-
-                <button class="btn-primary full-width" onclick="app.copyQuizCode()">
-                    📋 Kodni Nusxalash
-                </button>
-                
-                <button class="btn-secondary full-width" style="margin-top:12px;"
-                        onclick="app.showView('mainMenu')">
-                    🏠 Asosiy Menyu
-                </button>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════ QUIZGA KIRISH ═══════════════════════ -->
+        <!-- Join Quiz View -->
         <div id="joinQuizView" class="view">
-            <div class="page-header">
-                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
-                <h2>Quizga Kirish</h2>
-            </div>
-
-            <div class="center-card">
-                <div class="big-emoji">🔢</div>
-                <p class="center-label">6 xonali quiz kodini kiriting</p>
+            <div onclick="app.showView('mainMenu')"
+                style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
+            <div class="welcome-section" style="flex-direction:column; text-align:center;">
+                <h3>Quizga Qo'shilish</h3>
+                <p style="margin-bottom:20px;">6 xonali kodni kiriting</p>
                 <input type="text" id="joinCodeInput" maxlength="6"
-                       class="code-input" placeholder="_ _ _ _ _ _"
-                       autocomplete="off" autocorrect="off" autocapitalize="none"
-                       oninput="app.handleCodeInput(this)">
-                <button class="btn-primary full-width" id="joinQuizBtn"
-                        onclick="app.joinQuiz()">
-                    🚀 Boshlash
-                </button>
+                    style="text-align:center; font-size:1.5rem; letter-spacing:4px; font-weight:800;">
+                <button class="btn-primary" style="width:100%; margin-top:20px;"
+                    onclick="app.joinQuiz()">Boshlash</button>
             </div>
         </div>
 
-        <!-- ═══════════════════════ TEST BLOKLARINI TANLASH ═══════════════════════ -->
-        <div id="quizChunksView" class="view">
-            <div class="page-header">
-                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
-                <h2 id="chunkQuizTitle">Blokni tanlang</h2>
-            </div>
-            
-            <div class="info-card">
-                <p class="info-title">💡 Bilimni mustahkamlang</p>
-                <p class="info-desc">Har bir blok 25 ta savoldan iborat. Bir blokni bir necha marta yechish tavsiya etiladi.</p>
-            </div>
-
-            <div id="chunksContainer" class="menu-grid">
-                <!-- Bloklar JS orqali qo'shiladi -->
-            </div>
-        </div>
-
-        <!-- ═══════════════════════ TEST ISHLASH ═══════════════════════ -->
+        <!-- Taking Quiz View -->
         <div id="takingQuizView" class="view">
-            <div class="quiz-header">
-                <span id="questionCounter" class="q-counter">1 / 1</span>
-                <div class="timer-badge">
-                    ⏱ <span id="questionTimer">00:30</span>
-                </div>
+            <div class="q-header">
+                <span id="questionCounter">Savol: 1/1</span>
+                <div class="timer-badge">⏱ <span id="questionTimer">00:30</span></div>
             </div>
-
-            <div class="progress-bar-wrap">
-                <div id="qProgressBar" class="progress-bar-fill" style="width:0%"></div>
+            <div class="q-progress-bg">
+                <div id="qProgressBar" class="q-progress-fill" style="width: 0%"></div>
             </div>
-
-            <div id="questionsContainer" class="questions-wrap"></div>
-
-            <div class="quiz-nav">
-                <button class="btn-secondary" onclick="app.prevQuestion()">← Oldingi</button>
+            <div id="questionsContainer"></div>
+            <div class="nav-btns">
+                <button class="btn-secondary" onclick="app.prevQuestion()">Oldingi</button>
                 <button class="btn-primary" onclick="app.nextQuestion()">Keyingi →</button>
             </div>
         </div>
 
-        <!-- ═══════════════════════ TEST NATIJASI ═══════════════════════ -->
-        <div id="quizResultView" class="view center-view">
-            <div class="result-hero">
-                <div class="trophy-icon">🏆</div>
-                <h2>Test Yakunlandi!</h2>
-                <div class="big-score" id="finalScoreDisplay">0%</div>
-                <p class="score-label" id="finalScoreLabel">Baholanmoqda...</p>
-            </div>
-            <div class="result-details" id="resultDetails"></div>
-            
-            <div style="width:100%; display:flex; flex-direction:column; gap:10px;">
-                <button class="btn-primary full-width" onclick="app.retryQuiz()">
-                    🔄 Qayta Yechish
-                </button>
-                <button class="btn-secondary full-width" onclick="app.showView('mainMenu')">
-                    🏠 Asosiy Menyu
-                </button>
-            </div>
-        </div>
-
-        <!-- ═══════════════════════ NATIJALAR TARIXI ═══════════════════════ -->
+        <!-- Results View -->
         <div id="resultsView" class="view">
-            <div class="page-header">
-                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
-                <h2>Mening Natijalarim</h2>
-            </div>
-
+            <div onclick="app.showView('mainMenu')"
+                style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
             <div class="stats-grid">
-                <div class="stat-box">
-                    <span class="sb-val" id="stTotal">—</span>
-                    <span class="sb-lbl">Jami</span>
-                </div>
-                <div class="stat-box success">
-                    <span class="sb-val" id="stCorrect">—</span>
-                    <span class="sb-lbl">To'g'ri</span>
-                </div>
-                <div class="stat-box danger">
-                    <span class="sb-val" id="stWrong">—</span>
-                    <span class="sb-lbl">Xato</span>
+                <div class="stat-card"><span class="val" id="stTotal">0</span><span class="lbl">Jami</span></div>
+                <div class="stat-card"><span class="val" id="stCorrect" style="color:var(--success);">0</span><span
+                        class="lbl">To'g'ri</span></div>
+                <div class="stat-card"><span class="val" id="stWrong" style="color:var(--danger);">0</span><span
+                        class="lbl">Xato</span></div>
+            </div>
+            <div class="result-main-card">
+                <div class="progress-circle" id="avgCircle" data-text="0%"></div>
+                <div>
+                    <p style="font-size:0.75rem; color:var(--text-dim);">O'rtacha natija</p>
+                    <h3 id="avgText">Yaxshi</h3>
                 </div>
             </div>
+            <h3 style="margin-bottom:12px;">Natijalar tarixi</h3>
+            <div id="resultsContainer"></div>
+        </div>
 
-            <div class="avg-card">
-                <div class="circle-progress" id="avgCircle" data-text="0%"></div>
-                <div class="avg-info">
-                    <p class="avg-sub">O'rtacha natija</p>
-                    <h3 id="avgText">—</h3>
-                </div>
-            </div>
-
-            <h3 class="section-title">Tarix</h3>
-            <div id="resultsContainer" class="results-list">
-                <p class="empty-hint">Yuklanmoqda...</p>
+        <!-- Success Result View -->
+        <div id="quizResultView" class="view" style="text-align:center;">
+            <div class="welcome-section" style="flex-direction:column; padding:40px 20px;">
+                <span style="font-size:4rem;">🏆</span>
+                <h2 style="margin-top:16px;">Test Yakunlandi!</h2>
+                <div id="finalScoreDisplay"
+                    style="font-size:1.5rem; font-weight:800; color:var(--primary); margin:12px 0;">0%</div>
+                <button class="btn-primary" style="width:100%;" onclick="app.showView('mainMenu')">Doshbordga
+                    Qaytish</button>
             </div>
         </div>
 
-        <!-- ═══════════════════════ ADMIN PANEL ═══════════════════════ -->
+        <!-- Admin View -->
         <div id="adminView" class="view">
-            <div class="page-header">
-                <button class="back-btn" onclick="app.showView('mainMenu')">← Orqaga</button>
-                <h2>🛡️ Admin Panel</h2>
-            </div>
-
-            <!-- Admin tab navigatsiyasi -->
-            <div class="tab-nav">
-                <button class="tab-btn active" id="tabQuizzes"
-                        onclick="app.switchAdminTab('quizzes')">Quizlar</button>
-                <button class="tab-btn" id="tabResults"
-                        onclick="app.switchAdminTab('results')">Natijalar</button>
-                <button class="tab-btn" id="tabUsers"
-                        onclick="app.switchAdminTab('users')">Foydalanuvchilar</button>
-            </div>
-
-            <div id="adminContainer" class="admin-content">
-                <p class="empty-hint">Yuklanmoqda...</p>
-            </div>
+            <div onclick="app.showView('mainMenu')"
+                style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
+            <h3>🛠 Admin Paneli</h3>
+            <div id="adminContainer"></div>
         </div>
-
-        <!-- ═══════════════════════ ADMIN AUTH ═══════════════════════ -->
-        <div id="adminAuthView" class="view center-view">
-            <div class="auth-card">
-                <div class="big-emoji">🔐</div>
-                <h3>Admin Kirish</h3>
-                <p style="color:var(--text-dim); font-size:0.85rem; margin-bottom:20px;">
-                    Maxfiy kodni kiriting
-                </p>
-                <input type="password" id="adminCodeInput" maxlength="4"
-                       placeholder="••••" class="code-input"
-                       oninput="app.handleAdminCode(this)">
-                <p class="error-hint" id="adminAuthError" style="display:none;">
-                    ❌ Noto'g'ri kod!
-                </p>
-                <button class="btn-secondary full-width" style="margin-top:12px;"
-                        onclick="app.showView('mainMenu')">Bekor qilish</button>
-            </div>
-        </div>
-
-    </div><!-- .app-container -->
-
+    </div>
     <script src="app.js"></script>
 </body>
+
 </html>
