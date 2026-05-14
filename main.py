@@ -1,55 +1,42 @@
 import asyncio
-import logging
 import os
 import uvicorn
-from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from api import router as api_router
+from bot import run_bot
+from scheduler import check_and_send_notifications
 
-from database import init_db
-import api as api_module
+app = FastAPI()
 
-logger = logging.getLogger(__name__)
+# Static fayllarni ulash
+if not os.path.exists("static"):
+    os.makedirs("static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# API routerini ulash
+app.include_router(api_router, prefix="/api")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Startup va shutdown"""
-    # Startup
-    init_db()
-    logger.info("✅ FastAPI server started")
+@app.get("/")
+async def serve_index():
+    from fastapi.responses import FileResponse
+    return FileResponse("static/index.html")
+
+async def start_all():
+    # Bot, Server va Scheduler'ni birga ishga tushirish
+    config = uvicorn.Config(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    server = uvicorn.Server(config)
     
-    # Bot va Schedulerni parallel ishga tushirish
-    from bot import run_bot
-    bot_task = asyncio.create_task(run_bot())
-    
-    yield
-    
-    # Shutdown
-    bot_task.cancel()
-    logger.info("Server stopped")
-
-
-app = FastAPI(
-    title="TSUE Study Assistant API",
-    version="4.0.0",
-    lifespan=lifespan
-)
-
-# API routerlarini ulash
-app.include_router(api_module.router, prefix="/api")
-
-# Static fayllarni ulash (WebApp)
-static_dir = os.path.join(os.path.dirname(__file__), "static")
-if os.path.exists(static_dir):
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
-
+    # Hammasini parallel ishga tushirish
+    try:
+        await asyncio.gather(
+            server.serve(),
+            run_bot(),
+            check_and_send_notifications(),
+            return_exceptions=True
+        )
+    except Exception as e:
+        print(f"[!] Tizimda xatolik: {e}")
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 8080))
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-    )
-    logger.info(f"Starting server on port {port}...")
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    asyncio.run(start_all())
