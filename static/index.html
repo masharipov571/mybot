@@ -41,6 +41,12 @@
                     <span class="menu-desc">O'z natijalaringizni ko'ring</span>
                     <span class="arrow-icon">→</span>
                 </div>
+                <div class="menu-card" onclick="app.showView('quizRoomsView'); app.loadQuizRooms();">
+                    <div class="icon-box" style="background: #6366f1; color:white;">🏠</div>
+                    <span class="menu-title">Quiz Xonalari</span>
+                    <span class="menu-desc">Ochiq test kodlarini olish</span>
+                    <span class="arrow-icon">→</span>
+                </div>
                 <div class="menu-card" onclick="app.closeToBot('Dars jadvalini bot menyusi orqali olishingiz mumkin!')">
                     <div class="icon-box" style="background: #ef4444; color:white;">📅</div>
                     <span class="menu-title">Dars Jadvali</span>
@@ -134,6 +140,16 @@
             </div>
             <h3 style="margin-bottom:12px;">Natijalar tarixi</h3>
             <div id="resultsContainer"></div>
+        </div>
+
+        <!-- Quiz Rooms View -->
+        <div id="quizRoomsView" class="view">
+            <div onclick="app.showView('mainMenu')" style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
+            <div class="welcome-section" style="flex-direction:column; align-items:flex-start; margin-bottom:20px;">
+                <h3>Quiz Xonalari</h3>
+                <p style="font-size:0.85rem; color:var(--text-dim);">Hozirda mavjud bo'lgan ochiq testlar ro'yxati.</p>
+            </div>
+            <div id="quizRoomsContainer" class="rooms-list"></div>
         </div>
 
         <!-- Success Result View -->

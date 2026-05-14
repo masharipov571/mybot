@@ -397,3 +397,30 @@ input:focus {
     outline: none;
     border-color: var(--primary);
 }
+
+/* Yangi qo'shilgan stillar */
+.menu-card:hover {
+    transform: translateY(-4px);
+    border-color: var(--primary-light);
+    transition: 0.3s;
+}
+
+.rooms-list .history-item:hover {
+    transform: scale(1.02);
+    border: 1px solid var(--primary-light);
+    transition: 0.2s;
+}
+
+.rooms-list .h-name {
+    color: var(--primary);
+    letter-spacing: 0.5px;
+    font-size: 1rem;
+}
+
+/* Icon box bar bo'lib qolmasligi uchun */
+.icon-box {
+    display: flex !important;
+    flex-shrink: 0;
+    width: 44px !important;
+    height: 44px !important;
+}
