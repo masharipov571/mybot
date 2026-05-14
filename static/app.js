@@ -195,7 +195,7 @@ const app = {
         }
         
         this.currentQuestionIndex++;
-        setTimeout(() => this.renderNextQuestion(), 600);
+        setTimeout(() => this.renderNextQuestion(), 300);
     },
 
     startTimer() {
