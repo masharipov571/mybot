@@ -99,25 +99,23 @@
                 <p style="margin-bottom:20px;">6 xonali kodni kiriting</p>
                 <input type="text" id="joinCodeInput" maxlength="6"
                     style="text-align:center; font-size:1.5rem; letter-spacing:4px; font-weight:800;">
-                <button class="btn-primary" style="width:100%; margin-top:20px;"
-                    onclick="app.joinQuiz()">Boshlash</button>
+                <button id="joinBtn" class="btn-primary" style="width:100%; margin-top:20px;"
+                    onclick="app.joinQuiz()">Keyingi</button>
+            </div>
+            
+            <div id="chunkSelection" style="display:none;">
+                <h3 style="margin-bottom:12px;">Savollar diapazonini tanlang</h3>
+                <div id="chunkList" class="menu-grid"></div>
             </div>
         </div>
 
         <!-- Taking Quiz View -->
         <div id="takingQuizView" class="view">
             <div class="q-header">
-                <span id="questionCounter">Savol: 1/1</span>
+                <span id="questionCounter">Savol: 1/25</span>
                 <div class="timer-badge">⏱ <span id="questionTimer">00:30</span></div>
             </div>
-            <div class="q-progress-bg">
-                <div id="qProgressBar" class="q-progress-fill" style="width: 0%"></div>
-            </div>
-            <div id="questionsContainer"></div>
-            <div class="nav-btns">
-                <button class="btn-secondary" onclick="app.prevQuestion()">Oldingi</button>
-                <button class="btn-primary" onclick="app.nextQuestion()">Keyingi →</button>
-            </div>
+            <div id="questionsScrollContainer" style="padding-bottom:100px;"></div>
         </div>
 
         <!-- Results View -->
@@ -168,8 +166,24 @@
         <div id="adminView" class="view">
             <div onclick="app.showView('mainMenu')"
                 style="cursor:pointer; margin-bottom:20px; font-weight:700; color:var(--text-dim);">← Orqaga</div>
-            <h3>🛠 Admin Paneli</h3>
-            <div id="adminContainer"></div>
+            
+            <div id="adminLogin" style="text-align:center; padding:40px 0;">
+                <h3>🔐 Admin Kirish</h3>
+                <input type="password" id="adminPass" placeholder="Parolni kiriting" style="margin-top:20px; text-align:center;">
+                <button class="btn-primary" style="width:100%;" onclick="app.verifyAdmin()">Kirish</button>
+            </div>
+
+            <div id="adminContent" style="display:none;">
+                <div class="stats-grid">
+                    <div class="stat-card" onclick="app.loadAdminPanel('quizzes')" style="cursor:pointer; background:#e0e7ff;">
+                        <span class="val">📝</span><span class="lbl">Quizlar</span>
+                    </div>
+                    <div class="stat-card" onclick="app.loadAdminUsers()" style="cursor:pointer;">
+                        <span class="val">👥</span><span class="lbl">Userlar</span>
+                    </div>
+                </div>
+                <div id="adminDataContainer"></div>
+            </div>
         </div>
     </div>
     <script src="/static/app.js"></script>

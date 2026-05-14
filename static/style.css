@@ -424,3 +424,7 @@ input:focus {
     width: 44px !important;
     height: 44px !important;
 }
+#chunkList .menu-card { text-align: center; justify-content: center; background: var(--primary-light); color: var(--primary); border: 1.5px solid transparent; }
+#chunkList .menu-card:hover { border-color: var(--primary); transform: scale(1.05); }
+#adminDataContainer table { background: white; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+#adminDataContainer th { font-weight: 700; color: var(--text-main); }

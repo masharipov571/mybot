@@ -104,40 +104,98 @@ const app = {
             const res = await fetch(`/api/quiz/${code}`);
             if (!res.ok) throw new Error();
             const data = await res.json();
+            
             this.currentQuiz = data;
-            this.currentQuestions = data.questions;
-            this.currentQuestionIndex = 0;
-            this.userAnswers = {};
-            this.showView('takingQuizView');
-            this.renderQuestion();
+            
+            // Chunk selection ko'rsatish
+            document.getElementById('chunkSelection').style.display = 'block';
+            const chunkList = document.getElementById('chunkList');
+            chunkList.innerHTML = '';
+            
+            const total = data.total_questions;
+            const chunkSize = 25;
+            for (let i = 0; i < total; i += chunkSize) {
+                const start = i + 1;
+                const end = Math.min(i + chunkSize, total);
+                const card = document.createElement('div');
+                card.className = 'menu-card';
+                card.style.padding = '12px';
+                card.innerHTML = `<span class="menu-title">${start}-${end}</span>`;
+                card.onclick = () => this.startQuizChunk(start, end);
+                chunkList.appendChild(card);
+            }
         } catch (e) { tg.showAlert("Quiz topilmadi!"); }
     },
 
-    renderQuestion() {
-        const total = this.currentQuestions.length;
-        if (this.currentQuestionIndex >= total) {
+    async startQuizChunk(start, end) {
+        try {
+            const res = await fetch(`/api/quiz/${this.currentQuiz.code}?start=${start}&end=${end}`);
+            const data = await res.json();
+            this.currentQuestions = data.questions;
+            this.currentQuestionIndex = 0;
+            this.userAnswers = {};
+            this.chunkRange = `${start}-${end}`;
+            
+            document.getElementById('questionsScrollContainer').innerHTML = '';
+            this.showView('takingQuizView');
+            this.renderNextQuestion();
+        } catch (e) { tg.showAlert("Xatolik!"); }
+    },
+
+    renderNextQuestion() {
+        if (this.currentQuestionIndex >= this.currentQuestions.length) {
             this.finishQuiz();
             return;
         }
 
         const q = this.currentQuestions[this.currentQuestionIndex];
-        document.getElementById('questionCounter').textContent = `Savol: ${this.currentQuestionIndex + 1}/${total}`;
-        document.getElementById('qProgressBar').style.width = `${((this.currentQuestionIndex + 1) / total) * 100}%`;
-
-        const container = document.getElementById('questionsContainer');
-        container.innerHTML = `
-            <p class="q-text">${q.text}</p>
-            <div class="options-list">
+        const container = document.getElementById('questionsScrollContainer');
+        
+        const qDiv = document.createElement('div');
+        qDiv.className = 'welcome-section';
+        qDiv.style.flexDirection = 'column';
+        qDiv.style.alignItems = 'flex-start';
+        qDiv.style.marginBottom = '20px';
+        qDiv.id = `q-block-${this.currentQuestionIndex}`;
+        
+        qDiv.innerHTML = `
+            <p class="q-text" style="font-size:1rem; margin-bottom:16px;">${this.currentQuestionIndex + 1}. ${q.text}</p>
+            <div class="options-list" style="width:100%;">
                 ${['a', 'b', 'c', 'd'].map((opt, idx) => `
-                    <div class="opt-card ${this.userAnswers[this.currentQuestionIndex] === opt ? 'selected' : ''}" 
-                         onclick="app.selectOption('${opt}')">
+                    <div id="opt-${this.currentQuestionIndex}-${opt}" class="opt-card" 
+                         onclick="app.submitAnswer(${this.currentQuestionIndex}, '${opt}')">
                         <div class="opt-label">${String.fromCharCode(65 + idx)}</div>
                         <span>${q['option_' + opt]}</span>
                     </div>
                 `).join('')}
             </div>
         `;
+        
+        container.appendChild(qDiv);
+        qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        document.getElementById('questionCounter').textContent = `Savol: ${this.currentQuestionIndex + 1}/${this.currentQuestions.length}`;
         this.startTimer();
+    },
+
+    submitAnswer(qIdx, opt) {
+        if (this.userAnswers[qIdx]) return; // Allaqachon javob berilgan
+        
+        clearInterval(this.timerInterval);
+        this.userAnswers[qIdx] = opt;
+        const q = this.currentQuestions[qIdx];
+        const isCorrect = opt === q.correct_option;
+        
+        const selectedEl = document.getElementById(`opt-${qIdx}-${opt}`);
+        if (isCorrect) {
+            selectedEl.classList.add('correct');
+        } else {
+            selectedEl.classList.add('wrong');
+            document.getElementById(`opt-${qIdx}-${q.correct_option}`).classList.add('correct');
+        }
+        
+        this.currentQuestionIndex++;
+        setTimeout(() => this.renderNextQuestion(), 600);
     },
 
     startTimer() {
@@ -148,32 +206,12 @@ const app = {
             if (timerEl) timerEl.textContent = `00:${timeLeft < 10 ? '0' : ''}${timeLeft}`;
             if (timeLeft <= 0) {
                 clearInterval(this.timerInterval);
-                this.nextQuestion();
+                this.submitAnswer(this.currentQuestionIndex, 'none');
             }
             timeLeft--;
         };
         update();
         this.timerInterval = setInterval(update, 1000);
-    },
-
-    selectOption(opt) {
-        this.userAnswers[this.currentQuestionIndex] = opt;
-        this.renderQuestion();
-        setTimeout(() => this.nextQuestion(), 200);
-    },
-
-    nextQuestion() {
-        clearInterval(this.timerInterval);
-        this.currentQuestionIndex++;
-        this.renderQuestion();
-    },
-
-    prevQuestion() {
-        if (this.currentQuestionIndex > 0) {
-            clearInterval(this.timerInterval);
-            this.currentQuestionIndex--;
-            this.renderQuestion();
-        }
     },
 
     async finishQuiz() {
@@ -183,7 +221,10 @@ const app = {
             if (this.userAnswers[idx] === q.correct_option.toLowerCase()) correct++;
         });
         const perc = Math.round((correct / this.currentQuestions.length) * 100);
-        document.getElementById('finalScoreDisplay').textContent = `${perc}%`;
+        document.getElementById('finalScoreDisplay').innerHTML = `
+            <div>${perc}%</div>
+            <button class="btn-secondary" style="margin-top:20px; width:100%;" onclick="app.startQuizChunk(${this.chunkRange.split('-')[0]}, ${this.chunkRange.split('-')[1]})">Qayta yechish 🔄</button>
+        `;
 
         try {
             await fetch('/api/result', {
@@ -192,7 +233,7 @@ const app = {
                 body: JSON.stringify({
                     telegram_id: this.user.id,
                     quiz_code: this.currentQuiz.code,
-                    chunk_range: "1-" + this.currentQuestions.length,
+                    chunk_range: this.chunkRange,
                     correct_count: correct,
                     incorrect_count: this.currentQuestions.length - correct
                 })
@@ -245,8 +286,23 @@ const app = {
         } catch (e) { container.innerHTML = 'Xatolik.'; }
     },
 
+    async verifyAdmin() {
+        const pass = document.getElementById('adminPass').value;
+        try {
+            const res = await fetch(`/api/admin/check/${this.user.id}?password=${pass}`);
+            const data = await res.json();
+            if (data.is_admin) {
+                document.getElementById('adminLogin').style.display = 'none';
+                document.getElementById('adminContent').style.display = 'block';
+                this.loadAdminPanel();
+            } else {
+                tg.showAlert("Parol noto'g'ri!");
+            }
+        } catch (e) { tg.showAlert("Xatolik!"); }
+    },
+
     async loadAdminPanel() {
-        const container = document.getElementById('adminContainer');
+        const container = document.getElementById('adminDataContainer');
         container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
         try {
             const res = await fetch(`/api/admin/quizzes?telegram_id=${this.user.id}`);
@@ -254,12 +310,40 @@ const app = {
             container.innerHTML = data.map(q => `
                 <div class="welcome-section" style="flex-direction:column; align-items:flex-start; margin-bottom:12px; padding:16px;">
                     <div style="display:flex; justify-content:space-between; width:100%;">
-                        <strong style="color:var(--primary);">#${q.code}</strong>
-                        <button onclick="app.deleteQuiz('${q.code}')" style="background:none; border:none; color:var(--danger); font-weight:800;">O'CHIRISH</button>
+                        <strong style="color:var(--primary);">#${q.code} - ${q.title}</strong>
+                        <button onclick="app.deleteQuiz('${q.code}')" style="background:none; border:none; color:var(--danger); font-weight:800;">X</button>
                     </div>
                     <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Yaratuvchi: ${q.creator_name} | Savollar: ${q.total_questions} ta</div>
+                    <div style="margin-top:10px; width:100%; border-top:1px solid #eee; padding-top:10px;">
+                        ${q.participants.map(p => `
+                            <div style="font-size:0.75rem; margin-bottom:4px;">👤 ${p.first_name}: ${p.correct}/${p.correct + p.incorrect} (${p.chunk_range})</div>
+                        `).join('')}
+                    </div>
                 </div>
             `).join('');
+        } catch (e) { container.innerHTML = 'Xatolik.'; }
+    },
+
+    async loadAdminUsers() {
+        const container = document.getElementById('adminDataContainer');
+        container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+        try {
+            const res = await fetch(`/api/admin/users?telegram_id=${this.user.id}`);
+            const data = await res.json();
+            container.innerHTML = `
+                <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
+                    <tr style="background:#f8fafc;">
+                        <th style="padding:8px; border:1px solid #eee;">Ism</th>
+                        <th style="padding:8px; border:1px solid #eee;">ID</th>
+                    </tr>
+                    ${data.map(u => `
+                        <tr>
+                            <td style="padding:8px; border:1px solid #eee;">${u.first_name} ${u.username ? '@'+u.username : ''}</td>
+                            <td style="padding:8px; border:1px solid #eee;">${u.telegram_id}</td>
+                        </tr>
+                    `).join('')}
+                </table>
+            `;
         } catch (e) { container.innerHTML = 'Xatolik.'; }
     },
 
