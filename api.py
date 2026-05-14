@@ -53,25 +53,59 @@ def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(get_db)):
     return {"code": code}
 
 @router.get("/quiz/{code}")
-def get_quiz(code: str, db: Session = Depends(get_db)):
+def get_quiz(code: str, start: int = 1, end: int = 25, db: Session = Depends(get_db)):
     quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz topilmadi")
     
+    # Savollarni tartib bilan olamiz
+    all_questions = sorted(quiz.questions, key=lambda x: x.id)
+    total_count = len(all_questions)
+    
+    # Kerakli oraliqni qirqib olamiz (1-indexed inputni 0-indexed listga o'tkazamiz)
+    selected_questions = all_questions[start-1:end]
+    
+    questions_data = []
+    for q in selected_questions:
+        options = [
+            ("a", q.option_a),
+            ("b", q.option_b),
+            ("c", q.option_c),
+            ("d", q.option_d)
+        ]
+        
+        correct_text = ""
+        if q.correct_option.lower() == "a": correct_text = q.option_a
+        elif q.correct_option.lower() == "b": correct_text = q.option_b
+        elif q.correct_option.lower() == "c": correct_text = q.option_c
+        elif q.correct_option.lower() == "d": correct_text = q.option_d
+        
+        # FAQAT VARIANTLARNI ARALASHTIRAMIZ
+        random.shuffle(options)
+        
+        new_q = {
+            "text": q.text,
+            "option_a": options[0][1],
+            "option_b": options[1][1],
+            "option_c": options[2][1],
+            "option_d": options[3][1],
+            "correct_option": ""
+        }
+        
+        for idx, opt_pair in enumerate(options):
+            if opt_pair[1] == correct_text:
+                new_q["correct_option"] = ["a", "b", "c", "d"][idx]
+                break
+        
+        questions_data.append(new_q)
+        
     return {
         "id": quiz.id,
         "code": quiz.code,
+        "title": quiz.title,
+        "total_questions": total_count,
         "timer_per_question": quiz.timer_per_question,
-        "questions": [
-            {
-                "text": q.text,
-                "option_a": q.option_a,
-                "option_b": q.option_b,
-                "option_c": q.option_c,
-                "option_d": q.option_d,
-                "correct_option": q.correct_option
-            } for q in quiz.questions
-        ]
+        "questions": questions_data
     }
 
 @router.post("/result")
@@ -128,8 +162,29 @@ def get_public_quizzes(db: Session = Depends(get_db)):
     return result_data
 
 @router.get("/admin/check/{telegram_id}")
-def check_admin(telegram_id: str):
-    return {"is_admin": (telegram_id.strip() in ALLOWED_ADMINS)}
+def check_admin(telegram_id: str, password: str = None):
+    # Faqat belgilangan adminlar va to'g'ri parol bo'lsa
+    is_admin_user = (telegram_id.strip() in ALLOWED_ADMINS)
+    # Agar parol kiritilgan bo'lsa, uni ham tekshiramiz
+    if password:
+        return {"is_admin": is_admin_user and password == "1213"}
+    return {"is_admin": is_admin_user}
+
+@router.get("/admin/users")
+def get_admin_users(telegram_id: str, db: Session = Depends(get_db)):
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    users = db.query(models.User).order_by(desc(models.User.id)).all()
+    return [
+        {
+            "id": u.id,
+            "telegram_id": u.telegram_id,
+            "first_name": u.first_name,
+            "username": u.username,
+            "is_admin": u.is_admin
+        } for u in users
+    ]
 
 @router.get("/admin/quizzes")
 def get_admin_quizzes(telegram_id: str, db: Session = Depends(get_db)):
