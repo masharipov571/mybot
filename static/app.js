@@ -1,6 +1,22 @@
 const tg = window.Telegram.WebApp;
-tg.expand();
-tg.ready();
+try { tg.expand(); tg.ready(); } catch(e) {}
+
+// tg.showAlert Browser'da ishlamaydi — universal yordamchi
+function showMsg(text) {
+    try {
+        tg.showAlert(text);
+    } catch(e) {
+        alert(text);
+    }
+}
+function showConfirm(text) {
+    try {
+        // Browser'da: confirm() ni ishlatamiz
+        return confirm(text);
+    } catch(e) {
+        return confirm(text);
+    }
+}
 
 const app = {
     user: {
@@ -13,53 +29,85 @@ const app = {
     currentQuestionIndex: 0,
     userAnswers: {},
     timerInterval: null,
+    chunkRange: '1-25',
+    theme: 'light',
 
+    // ------------------------------------------------------------------
+    // INIT
+    // ------------------------------------------------------------------
     init() {
-        console.log("App initializing...");
-        try {
-            const nameEl = document.getElementById('userNameDisplay');
-            if (nameEl) nameEl.textContent = this.user.first_name.toUpperCase();
-        } catch (e) { console.error("Name display error:", e); }
+        // Theme
+        const saved = localStorage.getItem('theme') || 'light';
+        this.setTheme(saved);
 
-        // Admin statusini tekshirish, lekin uni kutib o'tirmasdan menyuni ochish
+        // User name & avatar
+        const nameEl = document.getElementById('userNameDisplay');
+        if (nameEl) nameEl.textContent = this.user.first_name.toUpperCase();
+        const av = document.getElementById('avatarCircle');
+        if (av) av.textContent = this.user.first_name.charAt(0).toUpperCase();
+
+        // Admin check
         this.checkAdminStatus().finally(() => {
             this.showView('mainMenu');
         });
+
+        // joinCodeInput: autocomplete va tarix o'chirish
+        const joinInput = document.getElementById('joinCodeInput');
+        if (joinInput) {
+            joinInput.setAttribute('autocomplete', 'off');
+            joinInput.setAttribute('autocorrect', 'off');
+            joinInput.setAttribute('autocapitalize', 'off');
+            joinInput.setAttribute('spellcheck', 'false');
+            joinInput.setAttribute('name', 'quiz_code_' + Date.now());
+        }
     },
 
+    // ------------------------------------------------------------------
+    // THEME
+    // ------------------------------------------------------------------
+    setTheme(t) {
+        this.theme = t;
+        document.documentElement.setAttribute('data-theme', t);
+        const btn = document.getElementById('themeToggleBtn');
+        if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+        localStorage.setItem('theme', t);
+    },
+    toggleTheme() {
+        this.setTheme(this.theme === 'dark' ? 'light' : 'dark');
+    },
+
+    // ------------------------------------------------------------------
+    // VIEWS
+    // ------------------------------------------------------------------
+    showView(viewId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        const target = document.getElementById(viewId);
+        if (target) { target.classList.add('active'); window.scrollTo(0, 0); }
+    },
+
+    closeToBot(msg) { tg.showAlert(msg); },
+
+    // ------------------------------------------------------------------
+    // ADMIN CHECK
+    // ------------------------------------------------------------------
     async checkAdminStatus() {
         try {
             const res = await fetch(`/api/admin/check/${this.user.id}`);
             const data = await res.json();
             if (data.is_admin) {
-                const adminBtn = document.getElementById('adminBtn');
-                if (adminBtn) adminBtn.style.display = 'flex';
+                const btn = document.getElementById('adminBtn');
+                if (btn) btn.style.display = 'flex';
             }
-        } catch (e) { console.error("Admin status error:", e); }
+        } catch (e) { console.error(e); }
     },
 
-    showView(viewId) {
-        console.log("Showing view:", viewId);
-        const views = document.querySelectorAll('.view');
-        views.forEach(v => v.classList.remove('active'));
-
-        const targetView = document.getElementById(viewId);
-        if (targetView) {
-            targetView.classList.add('active');
-            window.scrollTo(0, 0);
-        } else {
-            console.error("View not found:", viewId);
-        }
-    },
-
-    closeToBot(msg) {
-        tg.showAlert(msg);
-    },
-
+    // ------------------------------------------------------------------
+    // CREATE QUIZ
+    // ------------------------------------------------------------------
     copyPrompt() {
         const text = document.getElementById('promptText').innerText;
         navigator.clipboard.writeText(text).then(() => {
-            tg.showAlert("Prompt nusxalandi! Uni ChatGPT ga yuboring.");
+            showMsg("Prompt nusxalandi! Uni ChatGPT ga yuboring.");
         });
     },
 
@@ -67,170 +115,292 @@ const app = {
         const fileInput = document.getElementById('quizJsonFile');
         const timerInput = document.getElementById('timerInput');
         const titleInput = document.getElementById('quizTitleInput');
-        if (!titleInput.value) return tg.showAlert("Iltimos, fan nomini kiriting!");
-        if (!fileInput.files[0]) return tg.showAlert("Iltimos, JSON faylni yuklang!");
+        const btn = document.getElementById('createBtn');
 
-        tg.showConfirm("Quiz yaratilsinmi?", async (ok) => {
-            if (!ok) return;
-            const reader = new FileReader();
-            reader.onload = async (e) => {
+        if (!titleInput.value.trim()) return showMsg("Iltimos, fan nomini kiriting!");
+        if (!fileInput.files[0]) return showMsg("Iltimos, JSON faylni yuklang!");
+        if (!showConfirm("Quiz yaratilsinmi?")) return;
+
+        // Loading holati
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ Yuklanmoqda...'; }
+
+        const reader = new FileReader();
+        reader.onerror = () => {
+            if (btn) { btn.disabled = false; btn.textContent = '✅ Yaratish'; }
+            showMsg("Faylni o'qib bo'lmadi!");
+        };
+        reader.onload = async (e) => {
+            try {
+                let questions;
                 try {
-                    const questions = JSON.parse(e.target.result);
-                    const res = await fetch('/api/quiz', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            telegram_id: this.user.id,
-                            title: titleInput.value,
-                            timer_per_question: parseInt(timerInput.value),
-                            questions: questions
-                        })
-                    });
-                    const data = await res.json();
-                    tg.showAlert(`Muvaffaqiyatli! Quiz kodi: ${data.code}`);
-                    this.showView('mainMenu');
-                } catch (err) { tg.showAlert("Fayl formati noto'g'ri!"); }
-            };
-            reader.readAsText(fileInput.files[0]);
-        });
+                    questions = JSON.parse(e.target.result);
+                } catch {
+                    if (btn) { btn.disabled = false; btn.textContent = '✅ Yaratish'; }
+                    return showMsg("JSON fayl formati noto'g'ri! ChatGPT dan olingan faylni tekshiring.");
+                }
+
+                if (!Array.isArray(questions) || questions.length === 0) {
+                    if (btn) { btn.disabled = false; btn.textContent = '✅ Yaratish'; }
+                    return showMsg("Savollar ro'yxati bo'sh yoki massiv emas!");
+                }
+
+                const timerVal = parseInt(timerInput.value) || 30;
+                const res = await fetch('/api/quiz', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: this.user.id,
+                        title: titleInput.value.trim(),
+                        timer_per_question: timerVal,
+                        questions
+                    })
+                });
+
+                if (btn) { btn.disabled = false; btn.textContent = '✅ Yaratish'; }
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    return showMsg("Server xatosi: " + errText);
+                }
+
+                const data = await res.json();
+                // Formani tozalash
+                titleInput.value = '';
+                fileInput.value = '';
+                showMsg(`✅ Muvaffaqiyatli yaratildi!\n\nQuiz kodi: ${data.code}\nJami: ${questions.length} ta savol\nHar savol uchun vaqt: ${timerVal}s`);
+                this.showView('mainMenu');
+            } catch (err) {
+                if (btn) { btn.disabled = false; btn.textContent = '✅ Yaratish'; }
+                showMsg("Kutilmagan xatolik: " + (err.message || err));
+                console.error(err);
+            }
+        };
+        reader.readAsText(fileInput.files[0]);
     },
 
+    // ------------------------------------------------------------------
+    // JOIN QUIZ
+    // ------------------------------------------------------------------
     async joinQuiz() {
         const codeInput = document.getElementById('joinCodeInput');
-        const code = codeInput ? codeInput.value : "";
-        if (code.length !== 6) return tg.showAlert("6 xonali kod kiriting!");
+        const code = codeInput ? codeInput.value.trim() : '';
+        if (code.length !== 6) return showMsg("6 xonali kod kiriting!");
+
+        const joinBtn = document.getElementById('joinBtn');
+        if (joinBtn) { joinBtn.disabled = true; joinBtn.textContent = '⏳ Tekshirilmoqda...'; }
 
         try {
-            const res = await fetch(`/api/quiz/${code}`);
-            if (!res.ok) throw new Error();
-            const data = await res.json();
-            
-            this.currentQuiz = data;
-            
-            // Chunk selection ko'rsatish
-            document.getElementById('chunkSelection').style.display = 'block';
-            const chunkList = document.getElementById('chunkList');
-            chunkList.innerHTML = '';
-            
-            const total = data.total_questions;
-            const chunkSize = 25;
-            for (let i = 0; i < total; i += chunkSize) {
-                const start = i + 1;
-                const end = Math.min(i + chunkSize, total);
-                const card = document.createElement('div');
-                card.className = 'menu-card';
-                card.style.padding = '12px';
-                card.innerHTML = `<span class="menu-title">${start}-${end}</span>`;
-                card.onclick = () => this.startQuizChunk(start, end);
-                chunkList.appendChild(card);
+            // Faqat metadata olish (questions olmaydi — default end=25 bo'ladi)
+            const res = await fetch(`/api/quiz/${code}/meta`);
+            if (!res.ok) {
+                // /meta endpoint yo'q bo'lsa eski endpoint ishlatamiz
+                const res2 = await fetch(`/api/quiz/${code}`);
+                if (!res2.ok) throw new Error();
+                const data2 = await res2.json();
+                this.currentQuiz = data2;
+                this._buildChunkList(data2.total_questions);
+            } else {
+                const data = await res.json();
+                this.currentQuiz = data;
+                this._buildChunkList(data.total_questions);
             }
-        } catch (e) { tg.showAlert("Quiz topilmadi!"); }
+        } catch {
+            showMsg("Quiz topilmadi! Kodni tekshiring.");
+        } finally {
+            if (joinBtn) { joinBtn.disabled = false; joinBtn.textContent = 'Keyingi →'; }
+        }
     },
 
+    _buildChunkList(total) {
+        // Chunk selection ko'rsatish
+        document.getElementById('chunkSelection').style.display = 'block';
+        const chunkList = document.getElementById('chunkList');
+        chunkList.innerHTML = '';
+
+        const chunkSize = 25;
+        let chunkNum = 1;
+        for (let i = 0; i < total; i += chunkSize) {
+            const start = i + 1;
+            const end = Math.min(i + chunkSize, total);
+            const count = end - start + 1;
+
+            const card = document.createElement('div');
+            card.className = 'chunk-card';
+            card.innerHTML = `
+                <div class="chunk-num">${chunkNum}</div>
+                <div class="chunk-range">${start}–${end}</div>
+                <div class="chunk-count">${count} ta savol</div>
+            `;
+            card.onclick = () => this.startQuizChunk(start, end);
+            chunkList.appendChild(card);
+            chunkNum++;
+        }
+    },
+
+    // ------------------------------------------------------------------
+    // QUIZ CHUNK
+    // ------------------------------------------------------------------
     async startQuizChunk(start, end) {
         try {
             const res = await fetch(`/api/quiz/${this.currentQuiz.code}?start=${start}&end=${end}`);
+            if (!res.ok) throw new Error('Server xatosi: ' + res.status);
             const data = await res.json();
+
+            // Server: questions ALLAQACHON 25ta random tartibda (shuffle qilingan)
             this.currentQuestions = data.questions;
             this.currentQuestionIndex = 0;
             this.userAnswers = {};
             this.chunkRange = `${start}-${end}`;
-            
+
+            clearInterval(this.timerInterval);
             document.getElementById('questionsScrollContainer').innerHTML = '';
             this.showView('takingQuizView');
             this.renderNextQuestion();
-        } catch (e) { tg.showAlert("Xatolik!"); }
+        } catch(e) { showMsg("Xatolik: " + (e.message || e)); }
     },
 
+    // ------------------------------------------------------------------
+    // RENDER QUESTION
+    // ------------------------------------------------------------------
     renderNextQuestion() {
+        // Oldingi timerni to'xtatish
+        clearInterval(this.timerInterval);
+
         if (this.currentQuestionIndex >= this.currentQuestions.length) {
             this.finishQuiz();
             return;
         }
 
         const q = this.currentQuestions[this.currentQuestionIndex];
+        const idx = this.currentQuestionIndex;
+        const total = this.currentQuestions.length;
+
+        // Counter & progress
+        document.getElementById('questionCounter').textContent = `Savol: ${idx + 1}/${total}`;
+        const pct = ((idx) / total) * 100;
+        const fill = document.getElementById('qProgressFill');
+        if (fill) fill.style.width = pct + '%';
+
+        // Container: faqat joriy savolni ko'rsatish
         const container = document.getElementById('questionsScrollContainer');
-        
+        container.innerHTML = '';
+
         const qDiv = document.createElement('div');
-        qDiv.className = 'welcome-section';
-        qDiv.style.flexDirection = 'column';
-        qDiv.style.alignItems = 'flex-start';
-        qDiv.style.marginBottom = '20px';
-        qDiv.id = `q-block-${this.currentQuestionIndex}`;
-        
+        qDiv.className = 'q-block';
+        qDiv.id = `q-block-${idx}`;
+
         qDiv.innerHTML = `
-            <p class="q-text" style="font-size:1rem; margin-bottom:16px;">${this.currentQuestionIndex + 1}. ${q.text}</p>
-            <div class="options-list" style="width:100%;">
-                ${['a', 'b', 'c', 'd'].map((opt, idx) => `
-                    <div id="opt-${this.currentQuestionIndex}-${opt}" class="opt-card" 
-                         onclick="app.submitAnswer(${this.currentQuestionIndex}, '${opt}')">
-                        <div class="opt-label">${String.fromCharCode(65 + idx)}</div>
+            <p class="q-text">${idx + 1}. ${q.text}</p>
+            <div class="options-list">
+                ${['a', 'b', 'c', 'd'].map((opt, i) => `
+                    <div id="opt-${idx}-${opt}" class="opt-card"
+                         onclick="app.submitAnswer(${idx}, '${opt}')">
+                        <div class="opt-label">${String.fromCharCode(65 + i)}</div>
                         <span>${q['option_' + opt]}</span>
                     </div>
                 `).join('')}
             </div>
         `;
-        
+
         container.appendChild(qDiv);
-        qDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        document.getElementById('questionCounter').textContent = `Savol: ${this.currentQuestionIndex + 1}/${this.currentQuestions.length}`;
+        qDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+        // Timer yangilash
         this.startTimer();
     },
 
+    // ------------------------------------------------------------------
+    // SUBMIT ANSWER
+    // ------------------------------------------------------------------
     submitAnswer(qIdx, opt) {
-        if (this.userAnswers[qIdx]) return; // Allaqachon javob berilgan
-        
+        if (this.userAnswers[qIdx] !== undefined) return;
+
         clearInterval(this.timerInterval);
         this.userAnswers[qIdx] = opt;
+
         const q = this.currentQuestions[qIdx];
         const isCorrect = opt === q.correct_option;
-        
-        const selectedEl = document.getElementById(`opt-${qIdx}-${opt}`);
-        if (isCorrect) {
-            selectedEl.classList.add('correct');
-        } else {
-            selectedEl.classList.add('wrong');
-            document.getElementById(`opt-${qIdx}-${q.correct_option}`).classList.add('correct');
+
+        // Vizual ko'rsatish
+        if (opt !== 'none') {
+            const selectedEl = document.getElementById(`opt-${qIdx}-${opt}`);
+            if (selectedEl) selectedEl.classList.add(isCorrect ? 'correct' : 'wrong');
         }
-        
+        if (!isCorrect) {
+            const correctEl = document.getElementById(`opt-${qIdx}-${q.correct_option}`);
+            if (correctEl) correctEl.classList.add('correct');
+        }
+
+        // Barcha kartochkalarni o'chirish (yana bosish mumkin emas)
+        ['a','b','c','d'].forEach(o => {
+            const el = document.getElementById(`opt-${qIdx}-${o}`);
+            if (el) el.style.pointerEvents = 'none';
+        });
+
         this.currentQuestionIndex++;
-        setTimeout(() => this.renderNextQuestion(), 300);
+        setTimeout(() => this.renderNextQuestion(), opt === 'none' ? 50 : 700);
     },
 
+    // ------------------------------------------------------------------
+    // TIMER
+    // ------------------------------------------------------------------
     startTimer() {
         clearInterval(this.timerInterval);
-        let timeLeft = this.currentQuiz.timer_per_question;
+        const timerSec = this.currentQuiz?.timer_per_question || 30;
+        let timeLeft = timerSec;
+
         const timerEl = document.getElementById('questionTimer');
+        const pill = document.getElementById('timerPill');
+
         const update = () => {
-            if (timerEl) timerEl.textContent = `00:${timeLeft < 10 ? '0' : ''}${timeLeft}`;
+            if (!timerEl) return;
+            const mm = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+            const ss = (timeLeft % 60).toString().padStart(2, '0');
+            timerEl.textContent = `${mm}:${ss}`;
+
+            // Urgent animatsiya
+            if (pill) {
+                if (timeLeft <= 5) pill.classList.add('urgent');
+                else pill.classList.remove('urgent');
+            }
+
             if (timeLeft <= 0) {
                 clearInterval(this.timerInterval);
                 this.submitAnswer(this.currentQuestionIndex, 'none');
+                return;
             }
             timeLeft--;
         };
+
         update();
         this.timerInterval = setInterval(update, 1000);
     },
 
+    // ------------------------------------------------------------------
+    // FINISH QUIZ
+    // ------------------------------------------------------------------
     async finishQuiz() {
+        clearInterval(this.timerInterval);
         this.showView('quizResultView');
+
         let correct = 0;
-        this.currentQuestions.forEach((q, idx) => {
-            if (this.userAnswers[idx] === q.correct_option.toLowerCase()) correct++;
+        this.currentQuestions.forEach((q, i) => {
+            if (this.userAnswers[i] === q.correct_option) correct++;
         });
         const wrong = this.currentQuestions.length - correct;
         const perc = Math.round((correct / this.currentQuestions.length) * 100);
-        
+
         document.getElementById('finalScoreDisplay').textContent = `${perc}%`;
         document.getElementById('finalCorrect').textContent = correct;
         document.getElementById('finalWrong').textContent = wrong;
-        
+
+        const [rangeStart, rangeEnd] = this.chunkRange.split('-');
         document.getElementById('repeatBtnContainer').innerHTML = `
-            <button class="btn-secondary" style="width:100%;" onclick="app.startQuizChunk(${this.chunkRange.split('-')[0]}, ${this.chunkRange.split('-')[1]})">Qayta yechish 🔄</button>
+            <button class="btn-primary" style="width:100%;"
+                onclick="app.startQuizChunk(${rangeStart}, ${rangeEnd})">🔄 Qayta yechish</button>
         `;
 
+        // Natijani saqlash
         try {
             await fetch('/api/result', {
                 method: 'POST',
@@ -243,59 +413,99 @@ const app = {
                     incorrect_count: wrong
                 })
             });
-        } catch (e) { }
+        } catch {}
     },
 
+    // ------------------------------------------------------------------
+    // RESULTS
+    // ------------------------------------------------------------------
     async loadResults() {
         const container = document.getElementById('resultsContainer');
-        container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Yuklanmoqda...</p>';
         try {
             const res = await fetch(`/api/results/${this.user.id}`);
             const data = await res.json();
 
-            let tCorrect = 0, tWrong = 0, tTotalPerc = 0;
+            let tC = 0, tW = 0, tP = 0;
             data.forEach(r => {
-                tCorrect += r.correct_count;
-                tWrong += r.incorrect_count;
-                tTotalPerc += (r.correct_count / (r.correct_count + r.incorrect_count)) * 100;
+                tC += r.correct_count;
+                tW += r.incorrect_count;
+                const t = r.correct_count + r.incorrect_count;
+                if (t > 0) tP += (r.correct_count / t) * 100;
             });
 
-            const avg = data.length > 0 ? Math.round(tTotalPerc / data.length) : 0;
+            const avg = data.length > 0 ? Math.round(tP / data.length) : 0;
             document.getElementById('stTotal').textContent = data.length;
-            document.getElementById('stCorrect').textContent = tCorrect;
-            document.getElementById('stWrong').textContent = tWrong;
+            document.getElementById('stCorrect').textContent = tC;
+            document.getElementById('stWrong').textContent = tW;
 
             const circle = document.getElementById('avgCircle');
-            if (circle) {
-                circle.style.setProperty('--p', `${avg}%`);
-                circle.setAttribute('data-text', `${avg}%`);
-            }
-            document.getElementById('avgText').textContent = avg >= 80 ? "A'lo" : (avg >= 60 ? "Yaxshi" : "Past");
+            if (circle) { circle.style.setProperty('--p', `${avg}%`); circle.setAttribute('data-text', `${avg}%`); }
+            document.getElementById('avgText').textContent = avg >= 80 ? "A'lo" : avg >= 60 ? "Yaxshi" : "Past";
+
+            if (data.length === 0) { container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Hali natijalar yo\'q.</p>'; return; }
 
             container.innerHTML = data.map(r => {
                 const total = r.correct_count + r.incorrect_count;
                 const perc = total > 0 ? Math.round((r.correct_count / total) * 100) : 0;
+                const isGood = perc > 60;
                 return `
                     <div class="history-item">
-                        <div class="h-icon" style="background:${perc > 60 ? '#dcfce7' : '#fee2e2'}; color:${perc > 60 ? '#166534' : '#991b1b'};">
-                            ${perc > 60 ? '✅' : '❌'}
-                        </div>
+                        <div class="h-icon" style="background:${isGood ? '#d1fae5' : '#fee2e2'};color:${isGood ? 'var(--success)' : 'var(--danger)'};">${isGood ? '✅' : '❌'}</div>
                         <div class="h-content">
                             <div class="h-name">KOD: ${r.quiz_code} (${r.chunk_range})</div>
                             <div class="h-date">${new Date(r.date).toLocaleString()}</div>
-                            <div style="font-size:0.75rem; color:var(--text-dim); margin-top:4px;">
-                                To'g'ri: ${r.correct_count} | Xato: ${r.incorrect_count}
-                            </div>
+                            <div style="font-size:0.72rem;color:var(--text-dim);margin-top:3px;">To'g'ri: ${r.correct_count} | Xato: ${r.incorrect_count}</div>
                         </div>
                         <div class="h-score-wrap">
-                            <span class="h-perc" style="color:${perc >= 60 ? 'var(--success)' : 'var(--danger)'}; background:${perc >= 60 ? '#f0fdf4' : '#fef2f2'};">${perc}%</span>
+                            <span class="h-perc" style="color:${isGood ? 'var(--success)' : 'var(--danger)'};background:${isGood ? '#f0fdf4' : '#fef2f2'};">${perc}%</span>
                         </div>
                     </div>
                 `;
             }).join('');
-        } catch (e) { container.innerHTML = 'Xatolik.'; }
+        } catch { container.innerHTML = '<p style="color:var(--danger);">Xatolik yuz berdi.</p>'; }
     },
 
+    // ------------------------------------------------------------------
+    // QUIZ ROOMS — kod ustiga bosib copy
+    // ------------------------------------------------------------------
+    async loadQuizRooms() {
+        const container = document.getElementById('quizRoomsContainer');
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Yuklanmoqda...</p>';
+        try {
+            const res = await fetch('/api/public/quizzes');
+            const data = await res.json();
+            if (data.length === 0) {
+                container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Hozircha ochiq testlar yo\'q.</p>';
+                return;
+            }
+            container.innerHTML = data.map(q => `
+                <div class="room-card" onclick="app.copyQuizCode('${q.code}')">
+                    <div style="flex:1;">
+                        <div class="h-name">${q.title}</div>
+                        <div class="h-date">${q.total_questions} ta savol · ${q.created_at}</div>
+                    </div>
+                    <div style="text-align:center;">
+                        <div class="room-code">${q.code}</div>
+                        <div class="copy-hint">📋 bosib nusxalang</div>
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) { container.innerHTML = '<p style="color:var(--danger);">Xatolik: ' + e.message + '</p>'; }
+    },
+
+    // Kodga bosish — faqat clipboard copy, SCAN oynasi ochilmaydi
+    copyQuizCode(code) {
+        navigator.clipboard.writeText(code).then(() => {
+            showMsg(`✅ Kod nusxalandi: ${code}\n\n"Qo'shilish" bo'limiga o'tib, shu kodni kiriting.`);
+        }).catch(() => {
+            showMsg("Kod: " + code + "\n\n(Qo'lda nusxalang)");
+        });
+    },
+
+    // ------------------------------------------------------------------
+    // ADMIN
+    // ------------------------------------------------------------------
     async verifyAdmin() {
         const pass = document.getElementById('adminPass').value;
         try {
@@ -304,57 +514,90 @@ const app = {
             if (data.is_admin) {
                 document.getElementById('adminLogin').style.display = 'none';
                 document.getElementById('adminContent').style.display = 'block';
-                this.loadAdminPanel();
+                this.switchAdminTab('quizzes');
             } else {
                 tg.showAlert("Parol noto'g'ri!");
             }
-        } catch (e) { tg.showAlert("Xatolik!"); }
+        } catch { tg.showAlert("Xatolik!"); }
+    },
+
+    switchAdminTab(tab) {
+        // Tab buttons
+        document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+        const tabBtn = document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+        if (tabBtn) tabBtn.classList.add('active');
+
+        // Tab contents
+        document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+        const content = document.getElementById('adminTab' + tab.charAt(0).toUpperCase() + tab.slice(1));
+        if (content) content.classList.add('active');
+
+        // Load data
+        if (tab === 'quizzes') this.loadAdminPanel();
+        else if (tab === 'users') this.loadAdminUsers();
+        else if (tab === 'botControl') this.loadBotControl();
     },
 
     async loadAdminPanel() {
         const container = document.getElementById('adminDataContainer');
-        container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Yuklanmoqda...</p>';
         try {
             const res = await fetch(`/api/admin/quizzes?telegram_id=${this.user.id}`);
             const data = await res.json();
+            if (data.length === 0) { container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Quizlar yo\'q.</p>'; return; }
             container.innerHTML = data.map(q => `
-                <div class="welcome-section" style="flex-direction:column; align-items:flex-start; margin-bottom:12px; padding:16px;">
-                    <div style="display:flex; justify-content:space-between; width:100%;">
-                        <strong style="color:var(--primary);">#${q.code} - ${q.title}</strong>
-                        <button onclick="app.deleteQuiz('${q.code}')" style="background:none; border:none; color:var(--danger); font-weight:800;">X</button>
+                <div class="admin-quiz-card">
+                    <div class="admin-quiz-header">
+                        <div>
+                            <span class="quiz-code-badge">#${q.code}</span>
+                            <strong style="margin-left:8px;">${q.title}</strong>
+                        </div>
+                        <button class="del-btn" onclick="app.deleteQuiz('${q.code}')">✕</button>
                     </div>
-                    <div style="font-size:0.8rem; color:var(--text-dim); margin-top:4px;">Yaratuvchi: ${q.creator_name} | Savollar: ${q.total_questions} ta</div>
-                    <div style="margin-top:10px; width:100%; border-top:1px solid #eee; padding-top:10px;">
-                        ${q.participants.map(p => `
-                            <div style="font-size:0.75rem; margin-bottom:4px;">👤 ${p.first_name}: ${p.correct}/${p.correct + p.incorrect} (${p.chunk_range})</div>
-                        `).join('')}
+                    <div style="font-size:0.75rem;color:var(--text-dim);">
+                        ${q.creator_name}${q.creator_username ? ' @'+q.creator_username : ''} · ${q.total_questions} ta savol · ${q.created_at}
                     </div>
+                    ${q.participants.length > 0 ? `
+                        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px;">
+                            ${q.participants.map(p => `
+                                <div style="font-size:0.73rem;margin-bottom:4px;color:var(--text-dim);">
+                                    👤 ${p.first_name}${p.username ? ' @'+p.username : ''}: ${p.correct}/${p.correct+p.incorrect} (${p.chunk_range})
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
                 </div>
             `).join('');
-        } catch (e) { container.innerHTML = 'Xatolik.'; }
+        } catch { container.innerHTML = '<p style="color:var(--danger);">Xatolik.</p>'; }
     },
 
     async loadAdminUsers() {
-        const container = document.getElementById('adminDataContainer');
-        container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+        const container = document.getElementById('usersContainer');
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Yuklanmoqda...</p>';
         try {
             const res = await fetch(`/api/admin/users?telegram_id=${this.user.id}`);
             const data = await res.json();
-            container.innerHTML = `
-                <table style="width:100%; font-size:0.8rem; border-collapse:collapse;">
-                    <tr style="background:#f8fafc;">
-                        <th style="padding:8px; border:1px solid #eee;">Ism</th>
-                        <th style="padding:8px; border:1px solid #eee;">ID</th>
-                    </tr>
-                    ${data.map(u => `
-                        <tr>
-                            <td style="padding:8px; border:1px solid #eee;">${u.first_name} ${u.username ? '@'+u.username : ''}</td>
-                            <td style="padding:8px; border:1px solid #eee;">${u.telegram_id}</td>
-                        </tr>
-                    `).join('')}
-                </table>
-            `;
-        } catch (e) { container.innerHTML = 'Xatolik.'; }
+
+            document.getElementById('usersTotalBadge').textContent = data.length + ' ta';
+
+            if (data.length === 0) { container.innerHTML = '<p style="text-align:center;color:var(--text-dim);">Foydalanuvchilar yo\'q.</p>'; return; }
+
+            container.innerHTML = data.map(u => {
+                const initial = (u.first_name || 'M').charAt(0).toUpperCase();
+                const joinDate = u.joined_at ? new Date(u.joined_at).toLocaleString('uz-UZ', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+                return `
+                    <div class="user-item">
+                        <div class="user-avatar">${initial}</div>
+                        <div class="user-info">
+                            <div class="user-name">${u.first_name || '—'}${u.is_admin ? ' 🛡️' : ''}</div>
+                            ${u.username ? `<div class="user-username">@${u.username}</div>` : ''}
+                            <div class="user-meta">📅 ${joinDate}</div>
+                        </div>
+                        <div class="user-id">${u.telegram_id}</div>
+                    </div>
+                `;
+            }).join('');
+        } catch { container.innerHTML = '<p style="color:var(--danger);">Xatolik.</p>'; }
     },
 
     async deleteQuiz(code) {
@@ -362,42 +605,115 @@ const app = {
         try {
             await fetch(`/api/admin/quiz/${code}?telegram_id=${this.user.id}`, { method: 'DELETE' });
             this.loadAdminPanel();
-        } catch (e) { }
+        } catch {}
     },
 
-    async loadQuizRooms() {
-        const container = document.getElementById('quizRoomsContainer');
-        container.innerHTML = '<p style="text-align:center;">Yuklanmoqda...</p>';
+    // ------------------------------------------------------------------
+    // BOT CONTROL
+    // ------------------------------------------------------------------
+    async loadBotControl() {
         try {
-            const res = await fetch('/api/public/quizzes');
+            const res = await fetch(`/api/admin/bot-status?telegram_id=${this.user.id}`);
             const data = await res.json();
-            if (data.length === 0) {
-                container.innerHTML = '<p style="text-align:center; color:var(--text-dim);">Hozircha ochiq testlar yo\'q.</p>';
-                return;
-            }
-            container.innerHTML = data.map(q => `
-                <div class="history-item" onclick="app.copyQuizCode('${q.code}')" style="cursor:pointer; border-left: 4px solid var(--primary);">
-                    <div class="h-icon" style="background:#e0e7ff; color:#4338ca;">🔑</div>
-                    <div class="h-content">
-                        <div class="h-name">${q.title}</div>
-                        <div class="h-date">${q.total_questions} ta savol</div>
-                    </div>
-                    <div class="h-score-wrap">
-                        <div style="font-family:monospace; font-size:1.2rem; font-weight:800; color:var(--primary); background:#f1f5f9; padding:4px 12px; border-radius:8px; border:1px dashed var(--primary);">${q.code}</div>
-                        <div style="font-size:0.6rem; color:var(--text-dim); text-align:center; margin-top:4px;">NUSXALASH</div>
-                    </div>
-                </div>
-            `).join('');
-        } catch (e) { container.innerHTML = 'Xatolik yuz berdi.'; }
+            this._updateBotStatusUI(data.is_restricted);
+
+            const rMsg = document.getElementById('restrictionMsgEdit');
+            const oMsg = document.getElementById('openMsgEdit');
+            if (rMsg) rMsg.value = data.restriction_message || '';
+            if (oMsg) oMsg.value = data.open_broadcast_message || '';
+        } catch { console.error("Bot status yuklanmadi"); }
+        this.loadBotLogs();
     },
 
-    copyQuizCode(code) {
-        navigator.clipboard.writeText(code).then(() => {
-            tg.showScanQrPopup({ text: "Kod nusxalandi! Endi 'Qo'shilish' bo'limiga o'tib, uni kiriting." });
-            setTimeout(() => tg.closeScanQrPopup(), 2000);
-            tg.showAlert("Kod nusxalandi: " + code);
-        });
+    _updateBotStatusUI(isRestricted) {
+        const dot = document.getElementById('statusDot');
+        const text = document.getElementById('statusText');
+        const btnR = document.getElementById('btnRestrict');
+        const btnO = document.getElementById('btnOpen');
+        if (dot) {
+            dot.classList.toggle('restricted', isRestricted);
+        }
+        if (text) {
+            text.textContent = isRestricted ? '🔴 Bot cheklangan' : '🟢 Bot ochiq';
+            text.style.color = isRestricted ? 'var(--danger)' : 'var(--success)';
+        }
+        if (btnR) btnR.disabled = isRestricted;
+        if (btnO) btnO.disabled = !isRestricted;
     },
+
+    async restrictBot() {
+        if (!confirm("Botni cheklash va barcha userlarga texnik ishlar xabarini yuborishni tasdiqlaysizmi?")) return;
+        try {
+            const res = await fetch(`/api/admin/bot-restrict?telegram_id=${this.user.id}`, { method: 'POST' });
+            const data = await res.json();
+            this._updateBotStatusUI(true);
+            tg.showAlert("✅ " + data.message);
+            this.loadBotLogs();
+        } catch { tg.showAlert("Xatolik yuz berdi!"); }
+    },
+
+    async openBot() {
+        if (!confirm("Botni ochish va barcha userlarga broadcast yuborishni tasdiqlaysizmi?")) return;
+        try {
+            const res = await fetch(`/api/admin/bot-open?telegram_id=${this.user.id}`, { method: 'POST' });
+            const data = await res.json();
+            this._updateBotStatusUI(false);
+            tg.showAlert("✅ " + data.message);
+            this.loadBotLogs();
+        } catch { tg.showAlert("Xatolik yuz berdi!"); }
+    },
+
+    async sendBroadcast() {
+        const msgEl = document.getElementById('broadcastMsg');
+        const message = msgEl ? msgEl.value.trim() : '';
+        if (!message) return tg.showAlert("Xabar bo'sh bo'lishi mumkin emas!");
+        if (!confirm(`Xabar barcha foydalanuvchilarga yuboriladi:\n\n"${message.substring(0,100)}..."\n\nDavom etasiziimi?`)) return;
+        try {
+            const res = await fetch(`/api/admin/bot-broadcast?telegram_id=${this.user.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+            const data = await res.json();
+            tg.showAlert("📤 " + data.message);
+            if (msgEl) msgEl.value = '';
+        } catch { tg.showAlert("Xatolik!"); }
+    },
+
+    async saveBotMessages() {
+        const rMsg = document.getElementById('restrictionMsgEdit')?.value;
+        const oMsg = document.getElementById('openMsgEdit')?.value;
+        try {
+            const res = await fetch(`/api/admin/bot-messages?telegram_id=${this.user.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ restriction_message: rMsg, open_broadcast_message: oMsg })
+            });
+            const data = await res.json();
+            tg.showAlert("✅ Xabarlar saqlandi!");
+        } catch { tg.showAlert("Xatolik!"); }
+    },
+
+    async loadBotLogs() {
+        const container = document.getElementById('botLogsContainer');
+        if (!container) return;
+        container.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:0.8rem;">Yuklanmoqda...</p>';
+        try {
+            const res = await fetch(`/api/admin/bot-logs?telegram_id=${this.user.id}`);
+            const data = await res.json();
+            if (data.length === 0) { container.innerHTML = '<p style="text-align:center;color:var(--text-dim);font-size:0.8rem;">Loglar yo\'q.</p>'; return; }
+            container.innerHTML = data.map(l => {
+                const dt = new Date(l.timestamp).toLocaleString('uz-UZ', { month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+                return `
+                    <div class="log-item">
+                        <span class="log-badge ${l.action}">${l.action === 'restrict' ? '🔴 Cheklandi' : '🟢 Ochildi'}</span>
+                        <span style="flex:1;font-size:0.75rem;color:var(--text-dim);">Admin: ${l.admin_telegram_id}</span>
+                        <span class="log-time">${dt}</span>
+                    </div>
+                `;
+            }).join('');
+        } catch { container.innerHTML = '<p style="color:var(--danger);font-size:0.8rem;">Xatolik.</p>'; }
+    }
 };
 
 window.onload = () => app.init();

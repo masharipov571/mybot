@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Boolean, Text
 from sqlalchemy.orm import relationship
 from database import Base
 import datetime
@@ -10,6 +10,7 @@ class User(Base):
     first_name = Column(String)
     username = Column(String, nullable=True)
     is_admin = Column(Boolean, default=False)
+    joined_at = Column(DateTime, default=datetime.datetime.utcnow)
     results = relationship("Result", back_populates="user")
     subscription = relationship("Subscription", back_populates="user", uselist=False)
 
@@ -17,7 +18,7 @@ class Quiz(Base):
     __tablename__ = "quizzes"
     id = Column(Integer, primary_key=True, index=True)
     code = Column(String, unique=True, index=True)
-    title = Column(String, nullable=True) # Fan nomi
+    title = Column(String, nullable=True)
     creator_id = Column(Integer, ForeignKey("users.id"))
     timer_per_question = Column(Integer, default=30)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -53,3 +54,28 @@ class Subscription(Base):
     group_name = Column(String)
     notification_time = Column(String)
     user = relationship("User", back_populates="subscription")
+
+class BotStatus(Base):
+    """Bot holati - cheklangan yoki ochiq"""
+    __tablename__ = "bot_status"
+    id = Column(Integer, primary_key=True, index=True)
+    is_restricted = Column(Boolean, default=False)
+    restriction_message = Column(Text, default=(
+        "⚠️ Hozirda botda vaqtinchalik texnik ishlar olib borilmoqda.\n"
+        "Noqulaylik uchun uzr so'raymiz 🙏\n"
+        "Murojaat uchun: @masharipov571"
+    ))
+    open_broadcast_message = Column(Text, default=(
+        "✅ Texnik ishlar yakunlandi.\n"
+        "Bot yana normal ishlash holatiga qaytdi 🚀"
+    ))
+    updated_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+class BotLog(Base):
+    """Bot start/stop loglari"""
+    __tablename__ = "bot_logs"
+    id = Column(Integer, primary_key=True, index=True)
+    action = Column(String)  # "restrict" | "open"
+    admin_telegram_id = Column(Integer)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
+    note = Column(String, nullable=True)

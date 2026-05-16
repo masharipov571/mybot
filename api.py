@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 import random
 import string
 import os
+import asyncio
+import datetime
 
 from database import get_db
 import models
@@ -14,6 +16,22 @@ router = APIRouter()
 # Admin ID lari (Haqiqiy va Test)
 ALLOWED_ADMINS = ["7294699676", "123456789", os.getenv("ADMIN_TELEGRAM_ID", "").strip()]
 
+# ---------------------------------------------------------------------------
+# YORDAMCHI: Bot status olish / yaratish
+# ---------------------------------------------------------------------------
+def get_or_create_bot_status(db: Session) -> models.BotStatus:
+    status = db.query(models.BotStatus).first()
+    if not status:
+        status = models.BotStatus()
+        db.add(status)
+        db.commit()
+        db.refresh(status)
+    return status
+
+
+# ---------------------------------------------------------------------------
+# QUIZ ENDPOINTS
+# ---------------------------------------------------------------------------
 @router.post("/quiz")
 def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.telegram_id == quiz_data.telegram_id).first()
@@ -52,18 +70,36 @@ def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(get_db)):
     db.commit()
     return {"code": code}
 
+
+@router.get("/quiz/{code}/meta")
+def get_quiz_meta(code: str, db: Session = Depends(get_db)):
+    """Faqat metadata — savollarni yuklamaydi (tez)"""
+    quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
+    if not quiz:
+        raise HTTPException(status_code=404, detail="Quiz topilmadi")
+    total_count = db.query(models.Question).filter(models.Question.quiz_id == quiz.id).count()
+    return {
+        "id": quiz.id,
+        "code": quiz.code,
+        "title": quiz.title,
+        "total_questions": total_count,
+        "timer_per_question": quiz.timer_per_question
+    }
+
+
 @router.get("/quiz/{code}")
 def get_quiz(code: str, start: int = 1, end: int = 25, db: Session = Depends(get_db)):
     quiz = db.query(models.Quiz).filter(models.Quiz.code == code).first()
     if not quiz:
         raise HTTPException(status_code=404, detail="Quiz topilmadi")
     
-    # Savollarni tartib bilan olamiz
     all_questions = sorted(quiz.questions, key=lambda x: x.id)
     total_count = len(all_questions)
     
-    # Kerakli oraliqni qirqib olamiz (1-indexed inputni 0-indexed listga o'tkazamiz)
     selected_questions = all_questions[start-1:end]
+    
+    # Savollarni random tartibda aralashtirish
+    random.shuffle(selected_questions)
     
     questions_data = []
     for q in selected_questions:
@@ -80,7 +116,7 @@ def get_quiz(code: str, start: int = 1, end: int = 25, db: Session = Depends(get
         elif q.correct_option.lower() == "c": correct_text = q.option_c
         elif q.correct_option.lower() == "d": correct_text = q.option_d
         
-        # FAQAT VARIANTLARNI ARALASHTIRAMIZ
+        # Variantlarni ham aralashtirish
         random.shuffle(options)
         
         new_q = {
@@ -108,6 +144,7 @@ def get_quiz(code: str, start: int = 1, end: int = 25, db: Session = Depends(get
         "questions": questions_data
     }
 
+
 @router.post("/result")
 def submit_result(res_data: schemas.SubmitResult, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.telegram_id == res_data.telegram_id).first()
@@ -128,6 +165,7 @@ def submit_result(res_data: schemas.SubmitResult, db: Session = Depends(get_db))
     db.commit()
     return {"status": "success"}
 
+
 @router.get("/results/{telegram_id}")
 def get_results(telegram_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.telegram_id == telegram_id).first()
@@ -146,9 +184,9 @@ def get_results(telegram_id: int, db: Session = Depends(get_db)):
         } for r in results
     ]
 
+
 @router.get("/public/quizzes")
 def get_public_quizzes(db: Session = Depends(get_db)):
-    # Oxirgi 20 ta yaratilgan quizni qaytaramiz
     quizzes = db.query(models.Quiz).order_by(desc(models.Quiz.created_at)).limit(20).all()
     
     result_data = []
@@ -161,30 +199,35 @@ def get_public_quizzes(db: Session = Depends(get_db)):
         })
     return result_data
 
+
+# ---------------------------------------------------------------------------
+# ADMIN ENDPOINTS
+# ---------------------------------------------------------------------------
 @router.get("/admin/check/{telegram_id}")
 def check_admin(telegram_id: str, password: str = None):
-    # Faqat belgilangan adminlar va to'g'ri parol bo'lsa
     is_admin_user = (telegram_id.strip() in ALLOWED_ADMINS)
-    # Agar parol kiritilgan bo'lsa, uni ham tekshiramiz
     if password:
         return {"is_admin": is_admin_user and password == "1213"}
     return {"is_admin": is_admin_user}
+
 
 @router.get("/admin/users")
 def get_admin_users(telegram_id: str, db: Session = Depends(get_db)):
     if telegram_id.strip() not in ALLOWED_ADMINS:
         raise HTTPException(status_code=403, detail="Forbidden")
     
-    users = db.query(models.User).order_by(desc(models.User.id)).all()
+    users = db.query(models.User).order_by(desc(models.User.joined_at)).all()
     return [
         {
             "id": u.id,
             "telegram_id": u.telegram_id,
             "first_name": u.first_name,
-            "username": u.username,
-            "is_admin": u.is_admin
+            "username": u.username or "",
+            "is_admin": u.is_admin,
+            "joined_at": u.joined_at.isoformat() if u.joined_at else None
         } for u in users
     ]
+
 
 @router.get("/admin/quizzes")
 def get_admin_quizzes(telegram_id: str, db: Session = Depends(get_db)):
@@ -212,6 +255,7 @@ def get_admin_quizzes(telegram_id: str, db: Session = Depends(get_db)):
             
         result_data.append({
             "code": q.code,
+            "title": q.title or "Noma'lum fan",
             "created_at": q.created_at.strftime("%Y-%m-%d %H:%M"),
             "creator_name": creator.first_name if creator else "Noma'lum",
             "creator_username": creator.username if creator else "",
@@ -220,6 +264,7 @@ def get_admin_quizzes(telegram_id: str, db: Session = Depends(get_db)):
         })
         
     return result_data
+
 
 @router.delete("/admin/quiz/{code}")
 def delete_quiz(code: str, telegram_id: str, db: Session = Depends(get_db)):
@@ -233,3 +278,208 @@ def delete_quiz(code: str, telegram_id: str, db: Session = Depends(get_db)):
     db.delete(quiz)
     db.commit()
     return {"status": "success"}
+
+
+# ---------------------------------------------------------------------------
+# BOT CONTROL ENDPOINTS
+# ---------------------------------------------------------------------------
+@router.get("/admin/bot-status")
+def get_bot_status(telegram_id: str, db: Session = Depends(get_db)):
+    """Bot joriy holatini olish"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    status = get_or_create_bot_status(db)
+    return {
+        "is_restricted": status.is_restricted,
+        "restriction_message": status.restriction_message,
+        "open_broadcast_message": status.open_broadcast_message,
+        "updated_at": status.updated_at.isoformat() if status.updated_at else None
+    }
+
+
+@router.post("/admin/bot-restrict")
+async def restrict_bot(
+    telegram_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Botni cheklash - oddiy userlarga texnik ishlar xabari yuborish"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    status = get_or_create_bot_status(db)
+    status.is_restricted = True
+    status.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    
+    # Log saqlash
+    log = models.BotLog(
+        action="restrict",
+        admin_telegram_id=int(telegram_id),
+        note="Bot cheklangan"
+    )
+    db.add(log)
+    db.commit()
+    
+    # Fon rejimida xabar yuborish
+    background_tasks.add_task(broadcast_restriction_message, status.restriction_message)
+    
+    return {"status": "restricted", "message": "Bot cheklandi, xabarlar yuborilmoqda..."}
+
+
+@router.post("/admin/bot-open")
+async def open_bot(
+    telegram_id: str,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db)
+):
+    """Botni ochish - barcha userlarga broadcast yuborish"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    status = get_or_create_bot_status(db)
+    status.is_restricted = False
+    status.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    
+    # Log saqlash
+    log = models.BotLog(
+        action="open",
+        admin_telegram_id=int(telegram_id),
+        note="Bot qayta ochildi"
+    )
+    db.add(log)
+    db.commit()
+    
+    # Fon rejimida broadcast yuborish
+    background_tasks.add_task(broadcast_open_message, status.open_broadcast_message)
+    
+    return {"status": "open", "message": "Bot ochildi, broadcast yuborilmoqda..."}
+
+
+@router.post("/admin/bot-broadcast")
+async def send_broadcast(
+    telegram_id: str,
+    background_tasks: BackgroundTasks,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Maxsus broadcast xabar yuborish"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    message = body.get("message", "")
+    if not message:
+        raise HTTPException(status_code=400, detail="Xabar bo'sh bo'lishi mumkin emas")
+    
+    background_tasks.add_task(broadcast_custom_message, message)
+    return {"status": "sending", "message": "Broadcast yuborilmoqda..."}
+
+
+@router.put("/admin/bot-messages")
+def update_bot_messages(
+    telegram_id: str,
+    body: dict,
+    db: Session = Depends(get_db)
+):
+    """Texnik ishlar va broadcast xabarlarini tahrirlash"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    status = get_or_create_bot_status(db)
+    
+    if "restriction_message" in body:
+        status.restriction_message = body["restriction_message"]
+    if "open_broadcast_message" in body:
+        status.open_broadcast_message = body["open_broadcast_message"]
+    
+    status.updated_at = datetime.datetime.utcnow()
+    db.commit()
+    return {"status": "updated"}
+
+
+@router.get("/admin/bot-logs")
+def get_bot_logs(telegram_id: str, db: Session = Depends(get_db)):
+    """Bot start/stop loglarini olish"""
+    if telegram_id.strip() not in ALLOWED_ADMINS:
+        raise HTTPException(status_code=403, detail="Forbidden")
+    
+    logs = db.query(models.BotLog).order_by(desc(models.BotLog.timestamp)).limit(50).all()
+    return [
+        {
+            "id": l.id,
+            "action": l.action,
+            "admin_telegram_id": l.admin_telegram_id,
+            "timestamp": l.timestamp.isoformat(),
+            "note": l.note
+        } for l in logs
+    ]
+
+
+# ---------------------------------------------------------------------------
+# BROADCAST HELPER FUNKSIYALARI (fon rejimi)
+# ---------------------------------------------------------------------------
+async def _send_to_all_users(message_text: str):
+    """Barcha userlarga xabar yuborish (flood limit bilan)"""
+    import os
+    from database import SessionLocal
+    
+    bot_token = os.getenv("BOT_TOKEN")
+    if not bot_token:
+        print("[!] BOT_TOKEN yo'q, broadcast o'tkazib yuborildi")
+        return
+    
+    try:
+        import aiohttp
+    except ImportError:
+        print("[!] aiohttp kutubxonasi yo'q")
+        return
+
+    db = SessionLocal()
+    try:
+        users = db.query(models.User).all()
+        total = len(users)
+        sent = 0
+        failed = 0
+        
+        print(f"[Broadcast] Jami {total} foydalanuvchiga yuborilmoqda...")
+        
+        async with aiohttp.ClientSession() as session:
+            for user in users:
+                try:
+                    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    payload = {
+                        "chat_id": user.telegram_id,
+                        "text": message_text,
+                        "parse_mode": "HTML"
+                    }
+                    async with session.post(url, json=payload) as resp:
+                        if resp.status == 200:
+                            sent += 1
+                        else:
+                            failed += 1
+                    # Flood limit: har 0.05 sekundda 1 xabar (20 req/s)
+                    await asyncio.sleep(0.05)
+                except Exception as e:
+                    failed += 1
+                    print(f"[Broadcast] User {user.telegram_id} ga yuborib bo'lmadi: {e}")
+        
+        print(f"[Broadcast] Yakunlandi: yuborildi={sent}, xato={failed}, jami={total}")
+    finally:
+        db.close()
+
+
+def broadcast_restriction_message(message_text: str):
+    """Texnik ishlar xabari yuborish"""
+    asyncio.run(_send_to_all_users(message_text))
+
+
+def broadcast_open_message(message_text: str):
+    """Qayta ochilish xabari yuborish"""
+    asyncio.run(_send_to_all_users(message_text))
+
+
+def broadcast_custom_message(message_text: str):
+    """Maxsus broadcast xabar yuborish"""
+    asyncio.run(_send_to_all_users(message_text))

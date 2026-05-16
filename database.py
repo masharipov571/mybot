@@ -23,7 +23,7 @@ Base = declarative_base()
 
 def init_db():
     """Barcha jadvallarni yaratadi (agar mavjud bo'lmasa)"""
-    from models import User, Quiz, Question, Result, Subscription  # noqa
+    from models import User, Quiz, Question, Result, Subscription, BotStatus, BotLog  # noqa
     Base.metadata.create_all(bind=engine)
     print(f"[+] Database initialized: {DB_PATH}")
 
