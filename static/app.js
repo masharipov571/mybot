@@ -48,8 +48,15 @@ const app = {
 
         // Admin check
         this.checkAdminStatus().finally(() => {
-            this.showView('mainMenu');
+            const urlParams = new URLSearchParams(window.location.search);
+            const startView = urlParams.get('view') || 'mainMenu';
+            this.showView(startView);
+            if (startView === 'resultsView') {
+                this.loadResults();
+            }
         });
+
+        this.authUser();
 
         // joinCodeInput: autocomplete va tarix o'chirish
         const joinInput = document.getElementById('joinCodeInput');
@@ -59,6 +66,24 @@ const app = {
             joinInput.setAttribute('autocapitalize', 'off');
             joinInput.setAttribute('spellcheck', 'false');
             joinInput.setAttribute('name', 'quiz_code_' + Date.now());
+        }
+    },
+
+    async authUser() {
+        if (this.user.id !== 123456789) { // Faqat test bo'lmagan asl userlarni saqlaymiz
+            try {
+                await fetch('/api/auth', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        telegram_id: this.user.id,
+                        first_name: this.user.first_name,
+                        username: this.user.username || null
+                    })
+                });
+            } catch (e) {
+                console.error("Auth xatosi:", e);
+            }
         }
     },
 

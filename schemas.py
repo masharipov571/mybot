@@ -21,3 +21,8 @@ class SubmitResult(BaseModel):
     chunk_range: str
     correct_count: int
     incorrect_count: int
+
+class AuthUser(BaseModel):
+    telegram_id: int
+    first_name: str
+    username: Optional[str] = None

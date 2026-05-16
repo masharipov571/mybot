@@ -32,6 +32,25 @@ def get_or_create_bot_status(db: Session) -> models.BotStatus:
 # ---------------------------------------------------------------------------
 # QUIZ ENDPOINTS
 # ---------------------------------------------------------------------------
+@router.post("/auth")
+def auth_user(auth_data: schemas.AuthUser, db: Session = Depends(get_db)):
+    """Userni yangilash yoki qo'shish (WebApp dan kelgan ism bilan)"""
+    user = db.query(models.User).filter(models.User.telegram_id == auth_data.telegram_id).first()
+    if not user:
+        user = models.User(
+            telegram_id=auth_data.telegram_id,
+            first_name=auth_data.first_name,
+            username=auth_data.username
+        )
+        db.add(user)
+    else:
+        # Eski userni ismini yangilaymiz (masalan, ismini o'zgartirgan bo'lsa)
+        user.first_name = auth_data.first_name
+        user.username = auth_data.username
+    db.commit()
+    return {"status": "ok"}
+
+
 @router.post("/quiz")
 def create_quiz(quiz_data: schemas.QuizCreate, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.telegram_id == quiz_data.telegram_id).first()
