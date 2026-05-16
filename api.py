@@ -11,9 +11,6 @@ from database import get_db
 import models
 import schemas
 
-def uzb_time(dt):
-    return dt + datetime.timedelta(hours=5) if dt else None
-
 router = APIRouter()
 
 # Admin ID lari (Haqiqiy va Test)
@@ -202,7 +199,7 @@ def get_results(telegram_id: int, db: Session = Depends(get_db)):
             "chunk_range": r.chunk_range,
             "correct_count": r.correct_count,
             "incorrect_count": r.incorrect_count,
-            "date": uzb_time(r.date).isoformat()
+            "date": r.date.isoformat() + "Z" if r.date else None
         } for r in results
     ]
 
@@ -216,7 +213,7 @@ def get_public_quizzes(db: Session = Depends(get_db)):
         result_data.append({
             "code": q.code,
             "title": q.title or "Noma'lum fan",
-            "created_at": uzb_time(q.created_at).strftime("%Y-%m-%d %H:%M"),
+            "created_at": (q.created_at + datetime.timedelta(hours=5)).strftime("%Y-%m-%d %H:%M") if q.created_at else "",
             "total_questions": len(q.questions)
         })
     return result_data
@@ -246,7 +243,7 @@ def get_admin_users(telegram_id: str, db: Session = Depends(get_db)):
             "first_name": u.first_name,
             "username": u.username or "",
             "is_admin": u.is_admin,
-            "joined_at": uzb_time(u.joined_at).isoformat() if u.joined_at else None
+            "joined_at": u.joined_at.isoformat() + "Z" if u.joined_at else None
         } for u in users
     ]
 
@@ -272,13 +269,13 @@ def get_admin_quizzes(telegram_id: str, db: Session = Depends(get_db)):
                 "chunk_range": r.chunk_range,
                 "correct": r.correct_count,
                 "incorrect": r.incorrect_count,
-                "date": uzb_time(r.date).strftime("%Y-%m-%d %H:%M")
+                "date": (r.date + datetime.timedelta(hours=5)).strftime("%Y-%m-%d %H:%M") if r.date else ""
             })
             
         result_data.append({
             "code": q.code,
             "title": q.title or "Noma'lum fan",
-            "created_at": uzb_time(q.created_at).strftime("%Y-%m-%d %H:%M"),
+            "created_at": (q.created_at + datetime.timedelta(hours=5)).strftime("%Y-%m-%d %H:%M") if q.created_at else "",
             "creator_name": creator.first_name if creator else "Noma'lum",
             "creator_username": creator.username if creator else "",
             "total_questions": len(q.questions),
@@ -433,7 +430,7 @@ def get_bot_logs(telegram_id: str, db: Session = Depends(get_db)):
             "id": l.id,
             "action": l.action,
             "admin_telegram_id": l.admin_telegram_id,
-            "timestamp": uzb_time(l.timestamp).isoformat(),
+            "timestamp": l.timestamp.isoformat() + "Z" if l.timestamp else None,
             "note": l.note
         } for l in logs
     ]
